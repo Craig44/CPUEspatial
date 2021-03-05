@@ -26,7 +26,7 @@
 #' @importFrom TMB MakeADFun
 #' @importFrom mgcv gam PredictMat
 #' @importFrom Matrix .bdiag
-#' @importFrom stats model.matrix nlminb optimHess poisson rnorm sd terms var
+#' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
 configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, catchability_covariate_type = NULL, spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
                          spline_spatial_covariates = NULL, trace_level = "none") {
@@ -90,6 +90,9 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(length(catchability_covariates) != 0)
     model_matrix = evalit(paste0("model.matrix(",response_variable_label," ~ ",paste(ifelse(catchability_covariate_type == "factor", paste0("factor(",catchability_covariates,")"), catchability_covariates), collapse = " + "),",  data = data@data)"))
   
+  if(trace_level != "none")
+    print(paste0("built model_matrix"))
+  
   data_spatial_model_matrix = matrix(1, ncol = 2, nrow = n) 
   ## needs to be 2 columns as we estimate n-1 coeffectients so we need at least 2 cols so we have 1 transformed parameter
   ## will be ignored as, the transformed parameters will be fixed at 0
@@ -104,40 +107,56 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   S_spatial_list = list()
   S_spatial_reporting_list = list()
   if(length(spline_catchability_covariates) > 0) {
-    spline_ = evalit(paste0("gam(",response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"))
+    spline_ = evalit(paste0("mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"))
+    if(trace_level == "high")
+      print(paste0("length spline = ", length( spline_$smooth)))
+    
     for(i in 1:length(spline_$smooth)) {
       S_null = spline_$smooth[[i]]$S[[1]]
       for_plotting = seq(min(data@data[,spline_catchability_covariates[i]]),max(data@data[,spline_catchability_covariates[i]]),by = diff(range(data@data[,spline_catchability_covariates[i]])) / 50)
-      forReport = evalit(paste0("PredictMat(spline_$smooth[[i]], data = data.frame(",spline_catchability_covariates[i]," = for_plotting))"))
+      forReport = evalit(paste0("mgcv::PredictMat(spline_$smooth[[i]], data = data.frame(",spline_catchability_covariates[i]," = for_plotting))"))
       S_catchability_list[[i]] = S_null
       S_catchability_reporting_list[[i]] = forReport
     }
   } else {
-    spline_ = evalit(paste0("gam(",response_variable_label," ~ s(",response_variable_label,", bs = 'cs'), data = data@data, fit = F)"))
+    spline_ = evalit(paste0("mgcv::gam(",response_variable_label," ~ s(area, bs = 'cs'), data = data@data, fit = F)"))
+    if(trace_level == "high")
+      print(paste0("length spline = ", length( spline_$smooth)))
     S_null = spline_$smooth[[1]]$S[[1]]
-    for_plotting = seq(min(data@data[,response_variable_label]),max(data@data[,response_variable_label]),by = diff(range(data@data[,response_variable_label])) / 50)
-    forReport = evalit(paste0("PredictMat(spline_$smooth[[1]], data = data.frame(",response_variable_label," = for_plotting))"))
+    for_plotting = seq(min(data@data[,"area"]),max(data@data[,"area"]),by = diff(range(data@data[,"area"])) / 50)
+    forReport = mgcv::PredictMat(spline_$smooth[[1]], data = data.frame(area = for_plotting))
     S_catchability_list[[1]] = S_null
     S_catchability_reporting_list[[1]] = forReport
   }
+
+  if(trace_level != "none")
+    print(paste0("Passed catchability spline section"))
   
   if(length(spline_spatial_covariates) > 0) {
-    spline_spatial_ = evalit(paste0("gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"))
+    spline_spatial_ = evalit(paste0("mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"))
+    if(trace_level == "high")
+      print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     for(i in 1:length(spline_spatial_$smooth)) {
       S_null = spline_spatial_$smooth[[i]]$S[[1]]
       for_plotting = seq(min(data@data[,spline_spatial_covariates[i]]), max(data@data[,spline_spatial_covariates[i]]), by = diff(range(data@data[,spline_spatial_covariates[i]])) / 50)
-      forReport = evalit(paste0("PredictMat(spline_spatial_$smooth[[i]], data = data.frame(",spline_spatial_covariates[i]," = for_plotting))"))
+      forReport = evalit(paste0("mgcv::PredictMat(spline_spatial_$smooth[[i]], data = data.frame(",spline_spatial_covariates[i]," = for_plotting))"))
       S_spatial_list[[i]] = S_null
       S_spatial_reporting_list[[i]] = forReport
     }
   } else {
-    spline_spatial_ = evalit(paste0("gam(",response_variable_label," ~ s(",response_variable_label,", bs = 'cs'), data = data@data, fit = F)"))
+    spline_spatial_ = evalit(paste0("mgcv::gam(",response_variable_label," ~ s(area, bs = 'cs'), data = data@data, fit = F)"))
+    if(trace_level == "high")
+      print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
+    
     S_null = spline_spatial_$smooth[[1]]$S[[1]]
-    for_plotting = seq(min(data@data[,response_variable_label]),max(data@data[,response_variable_label]),by = diff(range(data@data[,response_variable_label])) / 50)
-    forReport = evalit(paste0("PredictMat(spline_spatial_$smooth[[1]], data = data.frame(",response_variable_label," = for_plotting))"))
+    for_plotting = seq(min(data@data[,"area"]),max(data@data[,"area"]),by = diff(range(data@data[,"area"])) / 50)
+    forReport = mgcv::PredictMat(spline_spatial_$smooth[[1]], data = data.frame(area = for_plotting))
     S_spatial_list[[1]] = S_null
     S_spatial_reporting_list[[1]] = forReport
   }
+  if(trace_level != "none")
+    print(paste0("Passed spatial spline section"))
+  
   S_catchability_combined = .bdiag(S_catchability_list)         # join S's in sparse matrix
   S_catchability_dims = unlist(lapply(S_catchability_list, nrow)) # Find dimension of each S
   S_catchability_design_matrix = .bdiag(S_catchability_reporting_list)
@@ -145,7 +164,6 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   S_spatial_dims = unlist(lapply(S_spatial_list, nrow)) # Find dimension of each S
   S_spatial_design_matrix = .bdiag(S_spatial_reporting_list)
   
-  pred_spline_model_mat = PredictMat(spline_$smooth[[1]], data = data@data)
   
   if(trace_level != "none")
     print(paste0("Passed: model matrix configurations and spline configurations"))
@@ -163,11 +181,16 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   Proj <- inla.mesh.projector(mesh, loc = coordinates(proj_df_t))
   P = Proj$proj$A
   Proj_area = proj_df_t@data$area
+  
+  if(trace_level != "none")
+    print(paste0("Passed: mapping projection grid to mesh"))
+  
   for(t in 1:n_t) {
-    proj_df_t = evalit(paste0("projection_df[projection_df$", time_variable_label," == ", time_levels[t],",]"))
+    proj_df_subset = subset(projection_df, subset = projection_df@data[,time_variable_label] == time_levels[t])
+
     if(length(spatial_covariates) > 0) {
-      proj_spatial_model_matrix = evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = proj_df_t@data)"))
-      data_spatial_model_matrix = evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = data@data)"))
+      proj_spatial_model_matrix = evalit(paste0("model.matrix(formula = ",response_variable_label," ~ 0 + ", paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = proj_df_subset@data)"))
+      data_spatial_model_matrix = evalit(paste0("model.matrix(formula = ",response_variable_label," ~ 0 + ",paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = data@data)"))
       X_spatial_proj_zpt[,,t] = proj_spatial_model_matrix
       X_spatial_ipt[,,t] = data_spatial_model_matrix
     }
@@ -175,7 +198,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
       ## for the spatial spline
       S_spatial_proj_model_mat = NULL
       for(i in 1:length(spline_spatial_covariates)) {
-        spatial_spline_proj = PredictMat(spline_spatial_$smooth[[i]], data = proj_df_t)
+        spatial_spline_proj = PredictMat(spline_spatial_$smooth[[i]], data = proj_df_subset@data)
         S_spatial_proj_model_mat = cbind(S_spatial_proj_model_mat, spatial_spline_proj)
       }
       spline_spatial_model_matrix_proj_zpt[,,t] = S_spatial_proj_model_mat
@@ -185,7 +208,9 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     print(paste0("Passed: projection model matrix construction"))
   
   ## Set up TMB object.
-  tmb_data <- list(n_i = n,
+  tmb_data <- list(
+               model = "SpatialTemporalCPUE",
+               n_i = n,
                n_t = n_t,
                y_i = data@data[,response_variable_label],
                t_i = time_variable - min(time_variable), # index for C++ language could be 1990 1991 etc,
@@ -282,13 +307,13 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   #dyn.load(dynlib(file.path("src","debug_standalone_version")))
   obj = NULL
   ## create obj
-  #if(include_epsilon & include_omega) {
-  #  obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL= "debug_standalone_version", method = "nlminb", hessian = T, silent=T)
-  #} else if(include_epsilon & !include_omega) {
-  #  obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL= "debug_standalone_version", method = "nlminb", hessian = T, silent=T)
-  #} else if(!include_epsilon & include_omega) {
-  #  obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL= "debug_standalone_version", method = "nlminb", hessian = T, silent=T)
-  #}
+  if(include_epsilon & include_omega) {
+    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  } else if(include_epsilon & !include_omega) {
+    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  } else if(!include_epsilon & include_omega) {
+    obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  }
   
   if(trace_level != "none")
     print(paste0("Passed: successfully built obj"))

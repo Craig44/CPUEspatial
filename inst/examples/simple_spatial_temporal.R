@@ -9,9 +9,11 @@ library(DSpat)
 library(ggplot2)
 library(gridExtra)
 library(RColorBrewer)
-library(mgcv)
+#library(mgcv)
 source(file.path("R","helper_funs.R"))
 source(file.path("R","check_inputs.R"))
+
+library(CPUEspatial)
 
 set.seed(123)
 # sample size
@@ -197,6 +199,7 @@ mesh = mesh
 family = 3
 link = 0
 trace_level = "none"
+warnings()
 
 ## check they all configure correclty
 simple_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
@@ -211,7 +214,7 @@ single_catch_model = configure_obj(data = data, projection_df = projection_df, m
 
 single_catch_sptial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                    response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                                   spatial_covariates = "habitat", spatial_covariate_type = "factor", spline_catchability_covariates = NULL,
+                                   spatial_covariates = "omega", spatial_covariate_type = "numeric", spline_catchability_covariates = NULL,
                                    spline_spatial_covariates = NULL, trace_level = "high")
 
 double_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
@@ -223,6 +226,9 @@ double_catch_sptial_model = configure_obj(data = data, projection_df = projectio
                                           response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = c("fleet_ndx","spatial_component"), catchability_covariate_type = c("factor","numeric"), 
                                           spatial_covariates = c("habitat", "spatial_component"), spatial_covariate_type = c("factor","numeric"), spline_catchability_covariates = NULL,
                                           spline_spatial_covariates = NULL, trace_level = "high")
+
+
+
 simple_model$obj$fn()
 single_catch_model$obj$fn()
 single_catch_sptial_model$obj$fn()
