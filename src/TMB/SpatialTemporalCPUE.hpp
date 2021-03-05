@@ -1,79 +1,17 @@
-/// @file ModelA.hpp
-
-// **DON'T** #include <TMB.hpp> as it is not include-guarded
+/*
+ * The idea is it follows, something like https://github.com/pconn/pref_sampling/blob/master/pref_sampling/src/PrefSampling.cpp
+ * 
+ */
+#ifndef SpatialTemporalCPUE_hpp
+#define SpatialTemporalCPUE_hpp
 
 #undef TMB_OBJECTIVE_PTR
 #define TMB_OBJECTIVE_PTR obj
-
+  
 /*
-* Valid link functions
+* 
+* The main obj$fn() call defines the joint negative log-likelihood 
 */
-enum valid_link {
-  log_link                 = 0,
-  logit_link               = 1,
-  probit_link              = 2,
-  inverse_link             = 3,
-  identity_link            = 4
-};
-/*
-* Valid families
-*/
-enum valid_family {
-  gaussian_family = 0,
-  binomial_family = 1,
-  Gamma_family    = 2,
-  poisson_family  = 3
-};
-/*
-* isNA
-*/
-template<class Type>
-bool isNA(Type x){
-  return R_IsNA(asDouble(x));
-}
-
-/*
-* Apply inverse link function for general cases
-*/
-template<class Type>
-Type inverse_linkfun(Type& eta, int& link) {
-  Type ans;
-  switch (link) {
-  case log_link:
-    ans = exp(eta);
-    break;
-  case identity_link:
-    ans = eta;
-    break;
-  case logit_link:
-    ans = invlogit(eta);
-    break;
-  case probit_link:
-    ans = pnorm(eta);
-    break;
-  case inverse_link:
-    ans = Type(1) / eta;
-    break;
-    // TODO: Implement remaining links
-  default:
-    error("Link not implemented!");
-  } // End switch
-  return ans;
-}
-
-// transform Y -Inf-Inf -> X bound lb - ub
-template <class Type> 
-Type invlogit_general(Type Y, Type lb, Type ub) {
-  return(lb + (ub - lb) * (1 / (1 + exp(-Y))));
-}
-
-
-template <class Type>
-Type Gmean(vector<Type> x) {
-  return(exp(log(x).sum() / x.size()));
-}
-
-
 // name of function below **MUST** match filename
 // (here it's ModelA)
 template <class Type>
@@ -88,7 +26,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   DATA_INTEGER( n_x );         // Number of vertices in SPDE mesh
   DATA_INTEGER( n_z );         // Number of projection cells
   DATA_INTEGER( p_s );         // number of spatial factors
-  DATA_INTEGER( p_c );         // number of catchability factors
+  DATA_INTEGER( p_c );         // number of catcspatialility factors
   */
   // Data
   DATA_VECTOR( y_i );       	 // data
@@ -104,7 +42,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   DATA_INTEGER( family ) ;                // 0 = gaussian, 1 = binomial, 2 = Gamma, 3 = Poisson
   DATA_INTEGER( link ) ;                  // 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity
   DATA_MATRIX( time_model_matrix ) ;      // year specific covariates [n_i, n_t]
-  DATA_MATRIX( model_matrix ) ;           // model matrix for non spatially related covariates (catchability), month, vessel etc [n_i, p_c], intercept time_model_matrix
+  DATA_MATRIX( model_matrix ) ;           // model matrix for non spatially related covariates (catcspatialility), month, vessel etc [n_i, p_c], intercept time_model_matrix
   // Model matrix timevariant spatial factors (Does not contain the intercept)
   DATA_ARRAY( X_spatial_ipt );	// Spatial projection model matrix for preference stuff dimensions = [n_i, p_s, n_t]
   DATA_ARRAY( X_spatial_proj_zpt );	// Spatial projection model matrix for preference stuff dimensions = [n_z, p_s, n_t]
@@ -116,19 +54,19 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   DATA_INTEGER( epsilon_indicator );       // 0 = no, 1 = yes
   
   // GAM stuff
-  DATA_IVECTOR( spline_flag );                // length(2) spline_flag(0) = catchability factors, spline_flag(1) habitat covariates, 0 no splines, 1 yes splines
-  DATA_MATRIX( spline_model_matrix ) ;        // model matrix catchability coeffecients
+  DATA_IVECTOR( spline_flag );                // length(2) spline_flag(0) = catcspatialility factors, spline_flag(1) spatial covariates, 0 no splines, 1 yes splines
+  DATA_MATRIX( spline_model_matrix ) ;        // model matrix catcspatialility coeffecients
   
-  DATA_ARRAY( spline_habitat_model_matrix_ipt ) ;        // model matrix catchability coeffecients
-  DATA_ARRAY( spline_habitat_model_matrix_proj_zpt ) ;  // model matrix catchability coeffecients
+  DATA_ARRAY( spline_spatial_model_matrix_ipt ) ;        // model matrix catcspatialility coeffecients
+  DATA_ARRAY( spline_spatial_model_matrix_proj_zpt ) ;  // model matrix catcspatialility coeffecients
   
   DATA_SPARSE_MATRIX( S );                    //Penalization matrix diag(S1,S2,S3,S4,S5) without storing off-diagonal zeros.
   DATA_IVECTOR( Sdims );                      //Dimensions of S1,S2,S3,S4 and S5
   DATA_SPARSE_MATRIX( designMatrixForReport );//Design matrix for report of splines
   
-  DATA_SPARSE_MATRIX( S_hab );                    //Penalization matrix diag(S1,S2,S3,S4,S5) without storing off-diagonal zeros.
-  DATA_IVECTOR( Sdims_hab );                      //Dimensions of S1,S2,S3,S4 and S5
-  DATA_SPARSE_MATRIX( designMatrixForReport_hab );//Design matrix for report of splines
+  DATA_SPARSE_MATRIX( S_spatial );                    //Penalization matrix diag(S1,S2,S3,S4,S5) without storing off-diagonal zeros.
+  DATA_IVECTOR( Sdims_spatial );                      //Dimensions of S1,S2,S3,S4 and S5
+  DATA_SPARSE_MATRIX( designMatrixForReport_spatial );//Design matrix for report of splines
   
   
   ///////////////
@@ -156,16 +94,16 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // GAM parameters
   PARAMETER_VECTOR( gammas );                           // Spline regression parameters
   PARAMETER_VECTOR( ln_lambda );                        // Penalization parameters
-  PARAMETER_VECTOR( gammas_hab );                       // Spline regression parameters for habitat coeffecients
-  PARAMETER_VECTOR( ln_lambda_hab );                    // Penalization parameters for habitat coeffecients
+  PARAMETER_VECTOR( gammas_spatial );                       // Spline regression parameters for spatial coeffecients
+  PARAMETER_VECTOR( ln_lambda_spatial );                    // Penalization parameters for spatial coeffecients
   
   ///////////////////////////
   // Do some internal transformations
   ///////////////////////////
-  // un constrain spatial and catchability coeffecients
+  // un constrain spatial and catcspatialility coeffecients
   vector<Type> spatial_betas(constrained_spatial_betas.size() + 1);
   vector<Type> time_betas(constrained_time_betas.size() + 1);
-
+  
   for(int i = 0; i < constrained_spatial_betas.size(); ++i) 
     spatial_betas(i) = constrained_spatial_betas(i);
   spatial_betas(spatial_betas.size() - 1) = -1.0 * constrained_spatial_betas.sum();
@@ -187,20 +125,20 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   vector<Type> omega_i = (A * omega_input) / tau_omega; // maps mesh to observations usign A
   vector<Type> epsilon_i(n_i);                                  // maps epsilon to observation
   vector<Type> spatial_covariate_i(n_i);                        // Spatail covariates linear
-  vector<Type> spline_hab_i(n_i);                                 // Habitat spline contribution 
+  vector<Type> spline_spatial_i(n_i);                                 // spatial spline contribution 
   vector<Type> pref_numerator(n_t);                             // sum^n_y (s(i))
   vector<Type> pref_denom(n_t);                                 // sum^N a_j exp(S(j))pref)
   vector<Type> relative_index(n_t);
   vector<Type> lambda = exp(ln_lambda);
-  vector<Type> lambda_hab = exp(ln_lambda_hab);
+  vector<Type> lambda_spatial = exp(ln_lambda_spatial);
   vector<Type> gamma_i;
-  vector<Type> gamma_hab_i;
+  vector<Type> gamma_spatial_i;
   SparseMatrix<Type> S_i; 
   pref_numerator.setZero();
   pref_denom.setZero();
-  spline_hab_i.setZero();
+  spline_spatial_i.setZero();
   
-  vector<Type> nll(6);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catchability 5 = spline habitat
+  vector<Type> nll(6);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial
   nll.setZero();
   // set some counters
   int i, t, k;
@@ -220,14 +158,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   for(t = 0; t < epsilon_input.cols(); ++t) {
     epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
     spatial_Xbeta = X_spatial_ipt.col(t).matrix() * spatial_betas;
-    spatial_splines = spline_habitat_model_matrix_ipt.col(t).matrix() * gammas_hab;
+    spatial_splines = spline_spatial_model_matrix_ipt.col(t).matrix() * gammas_spatial;
     for(i = 0; i < obs_t(t); ++i) {
       spatial_covariate_i(year_ndx_for_each_obs(t,i)) = spatial_Xbeta(year_ndx_for_each_obs(t,i));
       epsilon_i(year_ndx_for_each_obs(t,i)) = epsilon_vec(year_ndx_for_each_obs(t,i));
       if (spline_flag(1) == 1) 
-        spline_hab_i(year_ndx_for_each_obs(t,i)) = spatial_splines(year_ndx_for_each_obs(t,i));
+        spline_spatial_i(year_ndx_for_each_obs(t,i)) = spatial_splines(year_ndx_for_each_obs(t,i));
     }
-      
+    
     // Omega nll contribution
     if (epsilon_indicator == 1)
       nll(1) += GMRF(Q)(epsilon_input.col(t));
@@ -237,8 +175,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   }
   //nll(1) = SEPARABLE(AR1(eps_rho), GMRF(Q))(Epsilon_input);   // AR(1)
   
-  // Spline stuff catchability splines
-
+  // Spline stuff catcspatialility splines
+  
   if (spline_flag(0) == 1) {
     k = 0;
     for( i = 0;i < Sdims.size(); i++){
@@ -253,33 +191,33 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     REPORT( lambda );
     REPORT( gammas );
   }
-  // Habitat splines
+  // spatial splines
   if (spline_flag(1) == 1) {
     
     k = 0;
-    for( i = 0;i < Sdims_hab.size(); i++){
-      int m_i = Sdims_hab(i);
-      gamma_hab_i = gammas_hab.segment(k,m_i);        // Recover betai
-      S_i = S_hab.block(k,k,m_i,m_i);      // Recover Si
-      nll(5) -= Type(0.5) * m_i * ln_lambda_hab(i) - 0.5 * lambda_hab(i) * GMRF(S_i).Quadform(gamma_hab_i);
+    for( i = 0;i < Sdims_spatial.size(); i++){
+      int m_i = Sdims_spatial(i);
+      gamma_spatial_i = gammas_spatial.segment(k,m_i);        // Recover betai
+      S_i = S_spatial.block(k,k,m_i,m_i);      // Recover Si
+      nll(5) -= Type(0.5) * m_i * ln_lambda_spatial(i) - 0.5 * lambda_spatial(i) * GMRF(S_i).Quadform(gamma_spatial_i);
       k += m_i;
     }
-    vector<Type> splineForReport_hab = designMatrixForReport_hab * gammas_hab;
-    REPORT( splineForReport_hab );
-    REPORT( lambda_hab );
-    REPORT( gammas_hab );
+    vector<Type> splineForReport_spatial = designMatrixForReport_spatial * gammas_spatial;
+    REPORT( splineForReport_spatial );
+    REPORT( lambda_spatial );
+    REPORT( gammas_spatial );
   }
   
   // Numerator for preference log likelihood
   for(i = 0; i < n_i; ++i)
-    pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_hab_i(i) + epsilon_i(i) + omega_i(i);
+    pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
   
   // Systematic Component
-  vector<Type> eta =  model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_hab_i + omega_i + epsilon_i;
+  vector<Type> eta =  model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_spatial_i + omega_i + epsilon_i;
   
   if (spline_flag(0) == 1)
     eta += spline_model_matrix * gammas;
-
+  
   // Apply link function
   vector<Type> mu(eta.size());
   for (i = 0; i < mu.size(); i++)
@@ -331,7 +269,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     epsilon_vec = epsilon_input.col(t);
     epsilon_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + (Proj * epsilon_vec) /  tau_epsilon;
     if (spline_flag(1) == 1)
-      epsilon_proj += spline_habitat_model_matrix_proj_zpt.col(t).matrix() * gammas_hab;
+      epsilon_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
     
     relative_index(t) = (Proj_Area * exp(time_betas(t) + epsilon_proj)).sum();
     
@@ -348,7 +286,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   Type gmean = Gmean(relative_index);
   vector<Type> standardised_index = relative_index / Gmean(relative_index);
   for(i = 0; i < nll.size(); ++i)
-    std::cout << nll(i) << " ";
+  std::cout << nll(i) << " ";
   std::cout << std::endl;
   */
   
@@ -374,20 +312,20 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( betas );
   REPORT( spatial_betas );
   REPORT( spatial_splines )
-  REPORT( time_betas );
+    REPORT( time_betas );
   REPORT( relative_index);
   //REPORT( standardised_index );
   //REPORT( gmean );
-
+  
   REPORT( omega_input );
   REPORT( epsilon_input );
   REPORT( omega_i );
   REPORT( epsilon_i );
   REPORT( spatial_covariate_i );
-  REPORT( spline_hab_i );
+  REPORT( spline_spatial_i );
   REPORT( omega_proj );
   REPORT( pref_coef );
-   
+  
   REPORT( phi );
   REPORT( mu );
   REPORT( eta );
@@ -400,9 +338,11 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( MargSD_epsilon );
   //ADREPORT( relative_index );
   //ADREPORT( standardised_index );
-   
+  
   return nll.sum();
 }
 
 #undef TMB_OBJECTIVE_PTR
+#define TMB_OBJECTIVE_PTR this
 
+#endif

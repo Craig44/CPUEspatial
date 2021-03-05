@@ -2,16 +2,17 @@
 
 #define TMB_LIB_INIT R_init_CPUEspatial_TMBExports
 #include <TMB.hpp>
-#include "SpatailTemporaCPUENN.hpp"
+#include "HelperFuns.hpp"
 #include "SpatialTemporalCPUE.hpp"
+#include "SpatialTemporalCPUENN.hpp"
 
 template<class Type>
 Type objective_function<Type>::operator() () {
   DATA_STRING(model);
-  if(model == "SpatailTemporaCPUENN") {
-    return SpatailTemporaCPUENN(this);
-  } else if(model == "SpatialTemporalCPUE") {
+  if(model == "SpatialTemporalCPUE") {
     return SpatialTemporalCPUE(this);
+  } else if(model == "SpatialTemporalCPUENN") {
+    return SpatialTemporalCPUENN(this);
   } else {
     error("Unknown model.");
   }

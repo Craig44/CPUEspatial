@@ -1,0 +1,112 @@
+---
+title: "CPUEspatial"
+author: "C.Marsh"
+date: "4 March 2021"
+output: html_document
+header-includes:
+- \usepackage{csquotes} # for quotes \enquote{}
+- \usepackage{amsmath}
+- \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Data denoted by \(\boldsymbol{y} = (y_1,\dots,y_n)^T\) represent catches per sample sampled at locations \(\boldsymbol{s} = (s_1, \dots, s_n)\) on a two dimensional surface. As well as \(\boldsymbol{y}\) being spatially referenced, there is a temporal reference for each observation \(\boldsymbol{t} = (t_1, \dots, t_n)\). The general form of the observation model,
+
+\begin{align}
+y_i & \sim f(\eta_i) \nonumber \\
+\eta_i &= g^{-1} \left(\boldsymbol{Z}, \boldsymbol{\theta}, \boldsymbol{u}\right) \label{eq:sys_model} 
+\end{align}
+%
+where, \(g()\) is a link function and \(f()\) is the observed density and \(\boldsymbol{Z}, \boldsymbol{\theta}, \boldsymbol{u}\) are covariates, fixed effect and random effect parameters respectively.
+
+Two types of CPUE analysis are described in this project, conventional CPUE analysis (Section~\ref{subsub:conventional}), and geostatistical CPUE analysis (Section~\ref{subsub:geostatistical}). These differ only in the systematic component and likelihood configuration. They both have a link function (\(g\left(\right)\)) and assumed probability distribution (\(f\left(\right)\)).
+
+### Conventional CPUE analysis
+Conventional CPUE analysis are based on models that are purely fixed effect models \textbf{Find heaps of references}, which use Generalised Linear Models (GLM) and Generalised Additive Models (GAM). This analysis of model, forces a year factor in the systematic component \citep{maunder2004standardizing}, even when the coefficients for a given year are not significantly different from one another, along with other important covariates. After inference and model evaluation is complete. The year coefficients or some function of them (i.e. the canonical index Appendix~\ref{app:canonical_ndx}) are interpreted as a index of relative biomass. This relative index can then be used to infer population trajectory, or be used in as an input into a more advanced stock assessment model, such as an age-structured model. The systematic component can is expressed in the conventional GLM format
+
+\begin{equation}\label{eq:conventional_sys_component}
+	\boldsymbol{\eta} = \boldsymbol{X}\boldsymbol{\beta} 
+\end{equation}
+
+where, \(\boldsymbol{X}\) is the model matrix, and \(\boldsymbol{\beta} \) are the coefficients for all significant factors that are assumed to effect catches rates other than an underlying change to the stock of interest e.g. vessel, month, region. It is assumed that all the factors are fixed effects, and the log likelihood is expressed as,
+\begin{equation}\label{eq:ll_conventional}
+ll\left(\boldsymbol{\beta}, \theta | \boldsymbol{y}, \boldsymbol{X}\right) = log f\left(g^{-1}\left(\boldsymbol{\eta}\right),\theta\right)
+\end{equation}
+This is maximised for inference on \(\widehat{\boldsymbol{\beta}}\) and \(\widehat{\theta}\)
+
+
+### Geostatistical CPUE analysis
+In geostatistics, \(\mathcal{U}(\boldsymbol{s})\) defines a continuous stochastic process over the domain \(D\) which has \(d\) dimensions \(\{\mathcal{U}(\boldsymbol{s}): \boldsymbol{s} \in D \subseteq \mathbb{R}^d\}\) and \(u(s_i)\) for i in \(1,2,\dots,n\) locations is a realisation of the stochastic process at location \(s_i\).
+
+
+The geostatistics models of interest in this project make the following assumption regarding \(\mathcal{U}(\boldsymbol{s})\),
+\begin{equation}
+\mathcal{U}(\boldsymbol{s}) \sim \mathcal{MVN}\left(\boldsymbol{\mu}, \boldsymbol{\Sigma} \right)
+\end{equation}
+
+with \(\mathbb{E}\left[ \mathcal{U}(\boldsymbol{s})\right] = \boldsymbol{\mu}\) and covariance \(\boldsymbol{\Sigma} = \text{Cov}(u(s_i), u(s_j)\). Observations of the spatial process \(y_i\) can be defined by the sum of a trend (\(\mu_i\)) and spatially structured latent variable \(u(\boldsymbol{s})\)
+\begin{align}
+y_i & \sim f(\eta_i) \nonumber \\
+\eta_i &= g^{-1} \left(\boldsymbol{x}_i\boldsymbol{\beta} + u(s_i)\right) \label{eq:GMRF_model} \\ 
+u(\boldsymbol{s}) | \theta & \sim \mathcal{MVN}\left(\boldsymbol{0}, \boldsymbol{\Sigma}_{\theta} \right) \nonumber
+\end{align}
+
+with \(g()\) and \(f()\) following on from Equation~\ref{eq:sys_model}.
+
+
+Recent advancements in geostatistical models made by \cite{lindgren2011explicit}, include applying a stochastic partial differential equation (SPDE), where the solution is a Gaussian Field (GF) with Mat{\'{e}}rn correlations. As well as using Gaussian Markov Random Fields (GMRF) to approximate GF, thus providing a likelihood solution to \enquote{the big n} problem. GMRF are defined as a special case of the GF where only neighbourhood points in the covariance include non-zero entries
+\begin{equation}
+u(s_i | \boldsymbol{s_{-i}}) = u(s_i | \boldsymbol{s_{j}} : j \in NB_i)
+\end{equation}
+
+\(NB_i\) are the neighbourhood locations to \(s_i\). Treating the Gaussian Field as a GRMF changes \(\boldsymbol{\Sigma_{\alpha,\kappa}}\) from being a dense matrix to a sparse matrix which greatly reduces the computational cost.%, to save on operations the precision matrix is generally discussed over the covariance \(\boldsymbol{Q_{\alpha,\kappa}} = \boldsymbol{\Sigma_{\alpha,\kappa}}^{-1}\). 
+The other breakthrough from \cite{lindgren2011explicit} showed the properties of SPDE with irregular grids applying Constrained Delaunay Triangulation Networks (CDTN). When applying a CDTN, the spatial domain is represented as a set of non-intersecting triangles, where any two triangles meet at most along an edge or corner (Figure~\ref{fig:mesh}). Each vertex (corner) of a triangle (\(\omega_k\)) is treated as a Gaussian weight. The approximation of the underlying Gaussian Field at any location \(\boldsymbol{s}\) is evaluated by,
+\begin{equation}\label{eq:basis}
+u(\boldsymbol{s}) = \sum\limits_{k = 1}^m \psi_k \omega_k
+\end{equation}
+
+where, \(\psi_k \) are the basis function for \(m\) number of vertices in the CDTN.
+
+
+Given the recent advancements of statistical software \citep{tmb} and robust approximations to Gaussian random field \citep{lindgren2011explicit}, geostatistical models are being increasingly applied in standardised methods such as CPUE analysis \citep{thorson2015geostatistical, shelton2014spatial} \textbf{find more examples}. This class of model is an extension of the conventional analysis, by incorporating spatial variation as a Gaussian random field (GF), and are classed as Generalised Linear Mixed Models (GLMM). These GF's can be both time-dependent and time-independent.
+
+
+For this class of model the systematic component is described by three categories of explanatory variables; covariates that vary through space denoted by \(\boldsymbol{X^s}\) e.g. habitat, environmental variables, these variables change the mean of the Gaussian random field over space in a deterministic manner, time specific covariates which have the same temporal definition as \(I_t\) denoted by \(\boldsymbol{X^t}\) e.g. if yearly index then this would be year specific covariates and not time related factors such as month or time of day, and finally catchability covariates i.e. vessel, other time related factors e.g. month, weather and time of day denoted by \(\boldsymbol{X}\).
+\begin{equation}\label{eq:systematic_componet}
+\eta_i =   \boldsymbol{X_i}\boldsymbol{\beta} + \boldsymbol{X^t_i}\boldsymbol{\beta^t} + \boldsymbol{X^s_i}\boldsymbol{\beta^s} + \omega(s_i) + \epsilon(s_i,t_i) 
+\end{equation}
+%,
+Covariates are de-coupled in this manner mainly for allowing the incorporation of preferential sampling in the model (Section~\ref{sub:PS}). However there is also convenience in this parameterisaton when predicting catch rates over the spatial domain as catch ability factors are naturally isolated. Due to this de-coupling constraints are applied to each type of covariates for identifiability purposes. The model matrix for \(\boldsymbol{X}\) includes an intercept and is the reference level for discrete factors and intercept for continuous covariates (traditional GLM setup) and also the mean effect of time and space covariates. The coefficients \(\boldsymbol{\beta^t}\) and \(\boldsymbol{\beta^s}\) are constrained to sum to zero (Appendix~\ref{app:glm_matrix}). The random effect \(\omega(s_i)\) is a time-invariant GF and \(\epsilon(s_i,t_i)\) is a time varying GF, that is attributed to data point \(i\). Both \(\boldsymbol{\omega}\) and \(\boldsymbol{\epsilon_{t}}\) are assumed,
+\begin{equation}\label{eq:latent_spatial_model}
+\boldsymbol{\omega} \sim \mathcal{MVN}\left(\boldsymbol{0}, \boldsymbol{\Sigma}_{\boldsymbol{\omega}} \right)
+\end{equation}
+
+and,
+\begin{align}\label{eq:latent_spatial_time_model}
+\boldsymbol{\epsilon_{t}} \sim \mathcal{MVN}\left(\boldsymbol{0}, \boldsymbol{\Sigma}_{\boldsymbol{\epsilon}} \right) & &\text{for } t = 1\\
+\boldsymbol{\epsilon_{t}} \sim \mathcal{MVN}\left(\rho\boldsymbol{\epsilon_{t-1}}, \boldsymbol{\Sigma}_{\boldsymbol{\epsilon}} \right) & &\text{for } t > 1
+\end{align}
+
+where \(\rho\) is the autocorrelation coefficient  for \(\boldsymbol{\epsilon_{t}}\), and \(\boldsymbol{\Sigma}\) is the covariance matrix with a Mat{\'{e}}rn correlation structure, parametrised by \(\kappa\) and \(\tau\), which describe the decorrelation rate from a spatial point to all other points, and the variability respectively \textbf{Double check language\textbackslash interpretation of parameters.}. Both \(\boldsymbol{\omega}\) and \(\boldsymbol{\epsilon_{t}}\) take advantage of recent developments and approximations of Gaussian random fields through the stochastic partial differential equation (SPDE) based on \cite{lindgren2011explicit} work to make this model feasible. The random effects represent vertex points on triangulation mesh, and interpolation within triangulations are done using the predictive process \citep{latimer2009hierarchical} using linear basis functions \citep{lindgren2011explicit}.
+
+
+
+Models where coded in TMB \citep{tmb} taking advantage of Automatic Differentiation \citep{fournier2012ad} and the Laplace approximation for approximating complex integrals. The marginal log-likelihood is evaluated by integrating the joint log-likelihood function, with respect to the random effects,
+\begin{equation}\label{eq:loglik_geostatistical}
+	ll_M\left(\boldsymbol{\beta}, \boldsymbol{\theta}  | \boldsymbol{y}, \boldsymbol{X}\right) = log \int\int  f\left(g^{-1}\left(\boldsymbol{\eta}\right),\theta\right)Pr\left(\boldsymbol{\omega}\right)Pr\left(\boldsymbol{\epsilon}\right) d\boldsymbol{\omega}d\boldsymbol{\epsilon}
+\end{equation}
+
+In this case, \( \boldsymbol{\theta}\) is extended to include fixed effect parameters that define \(Pr\left(\boldsymbol{\omega}\right)\) and \(Pr\left(\boldsymbol{\epsilon}\right)\). The integral's are generally intractable, and solved used the Laplace approximation, which is conveniently available in the statistical software TMB \citep{tmb}.
+
+
+
+Once optimisation is conducted and convergence and diagnostic test satisfied, the index is calculated based on an area weighted approach. For a given time period, the index is a function of latent variables and spatial covariates over the entire domain of interest. In order to accomplish this the spatial domain is partitioned into \(n_s\) discrete cells, and the index
+\begin{equation}\label{eq:derived_ndx}
+I_t = \sum\limits_{s = 1}^{n_s} a_s g^{-1}\left(\beta^t_t + \boldsymbol{\tilde{X}_s^s}\boldsymbol{\beta^s} + \omega(s) + \epsilon(s,t)\right)
+\end{equation}
+
+where, \( a_s\) is the area of cell \(s\) and \(\boldsymbol{\tilde{X}_s^s}\) is the model matrix for the spatial covariates at area \(s\) (these covariates need to be known over the entire spatial domain), and \(\beta^t_t\) are the time specific coefficients.
