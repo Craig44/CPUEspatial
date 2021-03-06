@@ -37,7 +37,7 @@ epsilon_range <- 30     # range-decorrelation parameter
 omega_range <- 80   # range-decorrelation parameter
 nu = 1             # smoothness parameter  
 omega_model = RMmatern(nu = nu, var = omega_sigma2, scale = omega_range / sqrt(8))
-epsilon_model = RMmatern(nu = nu, var = epsilon_sigma2, scale = epsilon_range / sqrt(8))
+epsilon = RMmatern(nu = nu, var = epsilon_sigma2, scale = epsilon_range / sqrt(8))
 
 ## linear component
 # choose preferential parameter (beta=0 is uniform random)
@@ -98,10 +98,10 @@ time_popdata$space_time = NA
 dim(time_popdata)
 # Simulate Population Epsilon assumed iid
 for(i in 1:n_years) {
-  this_year_GF <- RFsimulate(epsilon_model, x = as.matrix(covariates[,c("x","y")]))$variable1
-  time_popdata$epsilon_model[time_popdata$year == i] = this_year_GF
+  this_year_GF <- RFsimulate(epsilon, x = as.matrix(covariates[,c("x","y")]))$variable1
+  time_popdata$epsilon[time_popdata$year == i] = this_year_GF
 }
-time_popdata$spatial_component = time_popdata$epsilon_model + time_popdata$norm_hab_factor + time_popdata$omega
+time_popdata$spatial_component = time_popdata$epsilon + time_popdata$norm_hab_factor + time_popdata$omega
 # Randomly select sample size per year roughly equal sampling in each year
 year_samples = sample(1:n_years, size = n, replace = T,  prob = rep(1,n_years) / n_years)
 sampData = NULL;
@@ -201,11 +201,20 @@ link = 0
 trace_level = "none"
 warnings()
 
+detach("package:CPUEspatial", unload=TRUE)
+library(CPUEspatial)
+
+
 ## check they all configure correclty
 simple_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                       response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
                       spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
                       spline_spatial_covariates = NULL, trace_level = "high")
+
+
+obj <- MakeADFun(simple_model$tmb_data, simple_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+
+
 
 single_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
@@ -214,8 +223,12 @@ single_catch_model = configure_obj(data = data, projection_df = projection_df, m
 
 single_catch_sptial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                    response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                                   spatial_covariates = "omega", spatial_covariate_type = "numeric", spline_catchability_covariates = NULL,
+                                   spatial_covariates = "habitat", spatial_covariate_type = "factor", spline_catchability_covariates = NULL,
                                    spline_spatial_covariates = NULL, trace_level = "high")
+single_catch_sptial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
+                                          response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
+                                          spatial_covariates = "omega", spatial_covariate_type = "numeric", spline_catchability_covariates = NULL,
+                                          spline_spatial_covariates = NULL, trace_level = "high")
 
 double_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                    response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = c("fleet_ndx","spatial_component"), catchability_covariate_type = c("factor","numeric"), 
@@ -226,6 +239,29 @@ double_catch_sptial_model = configure_obj(data = data, projection_df = projectio
                                           response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = c("fleet_ndx","spatial_component"), catchability_covariate_type = c("factor","numeric"), 
                                           spatial_covariates = c("habitat", "spatial_component"), spatial_covariate_type = c("factor","numeric"), spline_catchability_covariates = NULL,
                                           spline_spatial_covariates = NULL, trace_level = "high")
+
+## check spline congigurations
+detach("package:CPUEspatial", unload=TRUE)
+library(CPUEspatial)
+spline_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
+                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
+                             spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = "omega",
+                             spline_spatial_covariates = NULL, trace_level = "high")
+
+spline_spatial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
+                                   response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
+                                   spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                                   spline_spatial_covariates = "omega", trace_level = "high")
+
+spline_both_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
+                                     response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
+                                     spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = "omega",
+                                     spline_spatial_covariates = "epsilon", trace_level = "high")
+
+multi_spline_both_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
+                                  response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
+                                  spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = c("omega","epsilon"),
+                                  spline_spatial_covariates = c("omega","epsilon"), trace_level = "high")
 
 
 

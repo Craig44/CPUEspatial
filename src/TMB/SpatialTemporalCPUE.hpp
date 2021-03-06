@@ -25,7 +25,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   /*
   DATA_INTEGER( n_x );         // Number of vertices in SPDE mesh
   DATA_INTEGER( n_z );         // Number of projection cells
-  DATA_INTEGER( p_s );         // number of spatial factors
+  DATA_INTEGER( p_s );         // number of spatial covariates
   DATA_INTEGER( p_c );         // number of catcspatialility factors
   */
   // Data
@@ -68,7 +68,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   DATA_IVECTOR( Sdims_spatial );                      //Dimensions of S1,S2,S3,S4 and S5
   DATA_SPARSE_MATRIX( designMatrixForReport_spatial );//Design matrix for report of splines
   
-  
+  DATA_IARRAY( spatial_constrained_coeff_ndx );       // rows are variables, columns with elements > 0 index coeffecients for spatial_constrained
+  DATA_IVECTOR( spatial_covar_type );                 // one for each row of spatial_constrained_coeff_ndx, 0 = factor, 1 = numeric
+  /* example structure
+   *  0  1   2   3        # categorical variable with 5 levels
+   *  4 -99 -99 -99       # numeric variable   
+   *  5  6   7  -99       # categorical variable with 4 levels
+   */
+
   ///////////////
   // Parameters
   ///////////////
@@ -101,12 +108,34 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // Do some internal transformations
   ///////////////////////////
   // un constrain spatial and catcspatialility coeffecients
-  vector<Type> spatial_betas(constrained_spatial_betas.size() + 1);
-  vector<Type> time_betas(constrained_time_betas.size() + 1);
+  vector<Type> spatial_betas(X_spatial_ipt.col(0).cols());
+  spatial_betas.setZero();
+  Type constrained_totals = 0.0;
+  int beta_ndx = 0;
+  int n_rows =  spatial_constrained_coeff_ndx.rows();
+  for(int i = 0; i < spatial_constrained_coeff_ndx.rows(); ++i) {
+    if(spatial_covar_type(i) == 1) {
+      // numeric just a slope coeffecient no transformation needed
+      spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, 0));
+      beta_ndx++;
+    } else {
+      constrained_totals = 0.0;
+      for(int j = 0; j < spatial_constrained_coeff_ndx.cols(); ++j) {
+        // if 
+        if(((j + 1) >= spatial_constrained_coeff_ndx.cols()) | (spatial_constrained_coeff_ndx(i, j) < 0)) {
+          spatial_betas(beta_ndx) = -1.0 * constrained_totals;
+          ++beta_ndx;
+          break; // exit this covariate
+        } else {
+          spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          constrained_totals += constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          ++beta_ndx;
+        }
+      }
+    }
+  }
   
-  for(int i = 0; i < constrained_spatial_betas.size(); ++i) 
-    spatial_betas(i) = constrained_spatial_betas(i);
-  spatial_betas(spatial_betas.size() - 1) = -1.0 * constrained_spatial_betas.sum();
+  vector<Type> time_betas(constrained_time_betas.size() + 1);
   for(int i = 0; i < constrained_time_betas.size(); ++i) 
     time_betas(i) = constrained_time_betas(i);
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();

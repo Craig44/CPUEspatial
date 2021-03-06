@@ -8,8 +8,8 @@
 #' var_label = "x"
 #' evalit(paste0("df$",var_label)) # should return df$x
 #' @return what ever the evaluation string defines
-evalit = function (x)  {
-  eval(parse(text = x))
+evalit = function (x, ...)  {
+  eval(parse(text = x), ...)
 }
 
 

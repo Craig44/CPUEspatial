@@ -10,15 +10,7 @@ check_inputs = function (tmb_data, tmb_params)  {
   ## linear covariates
   if(sum(tmb_data$year_ndx_for_each_obs >= 0) != tmb_data$n_i)
     error_msgs = c(error_msgs, "year_ndx_for_each_obs has to have the same number of indices as there are data values, this will cause a crash.")
-  spatial_betas = vector()
-  for(i in 1:length(tmb_params$constrained_spatial_betas)) 
-    spatial_betas[i] = tmb_params$constrained_spatial_betas[i];
-  spatial_betas[length(tmb_params$constrained_spatial_betas) + 1] = -1.0 * sum(tmb_params$constrained_spatial_betas);
-  test = tryCatch(expr = tmb_data$X_spatial_ipt[,,1] %*% spatial_betas, error = function(e) {e})
-  if(inherits(test, "error")) 
-    error_msgs = c(error_msgs, "X_spatial_ipt not compatible with spatial_betas when transformed")
-  
-  
+
   test = tryCatch(expr = tmb_data$spline_spatial_model_matrix_ipt[,,1] %*% tmb_params$gammas_spatial, error = function(e) {e})
   if(inherits(test, "error")) 
     error_msgs = c(error_msgs, "spline_spatial_model_matrix_ipt not compatible with gammas_spatial")
