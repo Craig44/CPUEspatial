@@ -212,37 +212,61 @@ simple_model = configure_obj(data = data, projection_df = projection_df, mesh = 
                       spline_spatial_covariates = NULL, trace_level = "high")
 
 
-obj <- MakeADFun(simple_model$tmb_data, simple_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
-
-
+#obj_simple <- MakeADFun(simple_model$tmb_data, simple_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
 
 single_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
                              spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")
+#obj_single_catch <- MakeADFun(single_catch_model$tmb_data, single_catch_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
 
 single_catch_sptial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                    response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
                                    spatial_covariates = "habitat", spatial_covariate_type = "factor", spline_catchability_covariates = NULL,
                                    spline_spatial_covariates = NULL, trace_level = "high")
-single_catch_sptial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
+#obj_single_catch_sptial <- MakeADFun(single_catch_sptial_model$tmb_data, single_catch_sptial_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+
+single_catch_sptial_model_num = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                           response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
                                           spatial_covariates = "omega", spatial_covariate_type = "numeric", spline_catchability_covariates = NULL,
                                           spline_spatial_covariates = NULL, trace_level = "high")
+#obj_single_catch_sptial <- MakeADFun(single_catch_sptial_model$tmb_data, single_catch_sptial_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
 
 double_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                    response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = c("fleet_ndx","spatial_component"), catchability_covariate_type = c("factor","numeric"), 
                                    spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
                                    spline_spatial_covariates = NULL, trace_level = "high")
+#obj_double_catch <- MakeADFun(double_catch_model$tmb_data, double_catch_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
 
 double_catch_sptial_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                                           response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = c("fleet_ndx","spatial_component"), catchability_covariate_type = c("factor","numeric"), 
                                           spatial_covariates = c("habitat", "spatial_component"), spatial_covariate_type = c("factor","numeric"), spline_catchability_covariates = NULL,
                                           spline_spatial_covariates = NULL, trace_level = "high")
+#obj_double_catch_sptial <- MakeADFun(double_catch_sptial_model$tmb_data, double_catch_sptial_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+
+## marginal log-likelihood
+simple_model$obj$fn()
+single_catch_model$obj$fn()
+single_catch_sptial_model$obj$fn()
+single_catch_sptial_model_num$obj$fn()
+double_catch_model$obj$fn()
+double_catch_sptial_model$obj$fn()
+## gradient
+simple_model$obj$gr()
+single_catch_model$obj$gr()
+single_catch_sptial_model$obj$gr()
+single_catch_sptial_model_num$obj$gr()
+double_catch_model$obj$gr()
+double_catch_sptial_model$obj$fn()
+## look at the pars
+simple_model$obj$par
+single_catch_model$obj$par
+single_catch_sptial_model$obj$par
+single_catch_sptial_model_num$obj$par
+double_catch_model$obj$par
+double_catch_sptial_model$obj$par
 
 ## check spline congigurations
-detach("package:CPUEspatial", unload=TRUE)
-library(CPUEspatial)
 spline_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
                              spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = "omega",

@@ -16,7 +16,7 @@
 #' @param spline_spatial_covariates vector of strings
 #' @param projection_df a data.frame needs to have the same variable names (colnames) as data. Should supply variable values for all projection cells over all time steps
 #' @param mesh an inla.mesh object that has been created before this function is applied
-#' @param family 0 = Poisson, 1 = Negative Binomial, 2 = Gaussian, 3 = Gamma 
+#' @param family 0 = Gaussian, 1 = Binomial, 2 = Gamma, 3 = Poisson 
 #' @param link link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
 #' @export
@@ -319,11 +319,11 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     return(list(errors = any_errors$errors, tmb_pars = params, tmb_data = tmb_data))
   }
   ## set which parameters are being estimated and which are held constant.drr
-  pars_to_fix = c()
+  pars_to_fix = c("logit_pref_coef","logit_eps_rho")
   if(!include_epsilon)
-    pars_to_fix = c(pars_to_fix, "epsilon_input")
+    pars_to_fix = c(pars_to_fix, "epsilon_input", "ln_kappa_epsilon", "ln_tau_epsilon")
   if(!include_omega)
-    pars_to_fix = c(pars_to_fix, "omega_input")
+    pars_to_fix = c(pars_to_fix, "omega_input", "ln_kappa_omega", "ln_tau_omega")
   if(length(spatial_covariates) == 0)
     pars_to_fix = c(pars_to_fix, "constrained_spatial_betas")
   if(length(spline_catchability_covariates) == 0)
@@ -344,13 +344,15 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   #dyn.load(dynlib(file.path("src","debug_standalone_version")))
   obj = NULL
   ## create obj
-  #if(include_epsilon & include_omega) {
-  #  obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
-  #} else if(include_epsilon & !include_omega) {
-  #  obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
-  #} else if(!include_epsilon & include_omega) {
-  #  obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
-  #}
+  if(include_epsilon & include_omega) {
+    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  } else if(include_epsilon & !include_omega) {
+    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  } else if(!include_epsilon & include_omega) {
+    obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  } else if(!include_epsilon & !include_omega) {
+    obj <- MakeADFun(tmb_data, params, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+  }
   
   if(trace_level != "none")
     print(paste0("Passed: successfully built obj"))
