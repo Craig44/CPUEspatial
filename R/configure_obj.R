@@ -344,14 +344,15 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   #dyn.load(dynlib(file.path("src","debug_standalone_version")))
   obj = NULL
   ## create obj
+  to_be_silent = ifelse(trace_level != "none", TRUE, FALSE)
   if(include_epsilon & include_omega) {
-    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
   } else if(include_epsilon & !include_omega) {
-    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
   } else if(!include_epsilon & include_omega) {
-    obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+    obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
   } else if(!include_epsilon & !include_omega) {
-    obj <- MakeADFun(tmb_data, params, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
+    obj <- MakeADFun(tmb_data, params, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
   }
   
   if(trace_level != "none")

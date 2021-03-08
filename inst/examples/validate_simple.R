@@ -95,11 +95,13 @@ opt = nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, con
 rep = simple_model$obj$report(simple_model$obj$env$last.par.best)
 sd_rep = sdreport(simple_model$obj)
 
-glm_fit = glm(y_i ~ factor(year) + factor(fleet_ndx), data = sampData, family = Gamma(link = log))
+glm_fit = glm(y_i ~ area + factor(year) + factor(fleet_ndx), data = sampData, family = Gamma(link = log))
+glm_fit_alt = glm(y_i ~  factor(year) + factor(fleet_ndx), offset = log(area), data = sampData, family = Gamma(link = log))
 
 ## Compare the fits
 opt$objective 
 logLik(glm_fit)
+logLik(glm_fit_alt)
 ## get year indes
 con_ndx_glm = canonical.index(GLM = glm_fit, year = 1990:1999, base  = 1, year.name = "year")
 geo_index = con_ndx_glm$index
@@ -110,15 +112,22 @@ arrows(x0 = geo_index$year, x1 = geo_index$year, y0 = geo_index$lower.CI,
        y1 = geo_index$upper.CI, lwd = 3, angle = 90, length = 0.05, code = 3)
 legend('topright', legend = c("CPUE spatial","GLM"), col = c("red","black"), lwd = 3)
 ## manually calculate the dispersion of Gamma log GLM
-summary(glm_fit)$dispersion
+1/ summary(glm_fit)$dispersion
+1/ summary(glm_fit_alt)$dispersion
+rep$phi
+
+# AIC
 2*opt$objective + 2*length(simple_model$obj$par)
 
 ## influence plots
 myInfl = Influence$new(glm_fit)
-myInfl$calc()
+#myInfl$calc()
 attr(glm_fit, "family")
 attributes(glm_fit)
 
+## compare fitted values
+
+## compare coeffecients
 
 
 

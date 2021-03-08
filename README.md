@@ -16,3 +16,6 @@ we split out Habitat variables with catchability variables.
 - Example case
 - Diagnostics
 - Variable selection help - an issue I have found with these models are they can be slow to evalueate MLE estimates, so variable selection can be a tiresome approach if you try an stepwise approach, i.e. forward with some deviance acceptance criteria
+
+## TODO 
+[ ] add covariate step function, which will step through variables to select the best configurations.

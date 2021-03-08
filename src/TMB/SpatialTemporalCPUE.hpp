@@ -122,7 +122,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
       constrained_totals = 0.0;
       for(int j = 0; j < spatial_constrained_coeff_ndx.cols(); ++j) {
         // if 
-        if(((j + 1) >= spatial_constrained_coeff_ndx.cols()) | (spatial_constrained_coeff_ndx(i, j) < 0)) {
+        if((j + 1) >= spatial_constrained_coeff_ndx.cols()) {
+          spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          constrained_totals += constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          ++beta_ndx;
+          spatial_betas(beta_ndx) = -1.0 * constrained_totals;
+          ++beta_ndx;
+          break; // exit this covariate
+        } else if (spatial_constrained_coeff_ndx(i, j) < 0) {
           spatial_betas(beta_ndx) = -1.0 * constrained_totals;
           ++beta_ndx;
           break; // exit this covariate

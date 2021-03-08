@@ -3,7 +3,7 @@ canonical.index = function (GLM, year, base = BASEYR, year.name = "year",
                             ylim = NULL, rescale = FALSE, add = FALSE, one.line = TRUE, 
                             one.line.lty = 2, one.line.col = "black", xlab = "Fishing year", 
                             ylab = "Index", digits = 4, show.R = FALSE)  {
-  res <- as.data.frame(summary(GLM)$coefficients)
+  res <- as.data.frame(coefficients(GLM))
   index <- regexpr(year.name, row.names(res)) > 0
   X <- res[index, 1]
   V <- summary(GLM)$cov.unscaled[index, , drop = FALSE][, index]

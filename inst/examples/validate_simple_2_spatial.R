@@ -1,13 +1,16 @@
 #'
 #' A script to validate functionality with GLM and GAM
-#' gamma response variable with discrete spatail area fleet and year effects
+#' gamma response variable with discrete spatail area plus numeric linear spatial variable fleet and year effects
 #' Compare method with normal GLM approach
 #'
 library(TMB)
 library(CPUEspatial)
 library(INLA)
+library(RandomFields)
+library(RANN)
+library(ggplot2)
 source(file.path("inst","examples","canonical.index.R"))
-source(file.path("inst","examples","influ.R"))
+
 gm_mean = function(x, na.rm=TRUE){
   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
 }
@@ -18,6 +21,11 @@ set.seed(123)
 grid_dim = c("x"=100, "y"=100)
 max.edge = c(4, 10)
 cutoff = c(6)
+# marginal variance of the spatial-temporal field 
+depth_sigma2 <- 2  # marginal variance of the eta field
+depth_range <- 30     # range-decorrelation parameter
+nu = 1             # smoothness parameter  
+depth_model = RMwhittle(nu = nu, var = depth_sigma2, scale = depth_range )
 
 # sample size
 n = 1000 # per year
@@ -52,6 +60,15 @@ proj_df$region[proj_df$x > 50 & proj_df$y > 50] = 2
 proj_df$region[proj_df$x < 50 & proj_df$y < 50] = 3
 proj_df$region[proj_df$x > 50 & proj_df$y < 50] = 4
 
+proj_df$depth <- RFsimulate(depth_model, x=as.matrix(proj_df[,c("x","y")]), exactness=TRUE)$variable1
+
+ggplot(proj_df, aes(x = x, y = y, fill = depth)) + 
+  geom_tile()
+
+depth_eff = seq(-2, 4, by = 0.1)
+depth_coef = 2
+plot(depth_eff, depth_eff * depth_coef, xlab = "Depth", ylab = "effect on Y", type = "l", lwd  =3)
+
 ## area cells
 plot(1, 1, xlim = c(0, grid_dim["x"]), ylim = c(0, grid_dim["y"]), type = "n", xlab = "", ylab = "", xaxs = "i", yaxs = "i")
 abline(v = c(seq(0,grid_dim["x"], by = 50)), lwd = 3)
@@ -74,6 +91,7 @@ for(i in 1:n_years) {
   fleet_ndx = c(fleet_ndx, sample(1:length(fleet_coef), size = samples_this_year, replace = T,  prob = c(prob_fleet1_per_year[i], prob_fleet2_per_year[i],prob_fleet3_per_year[i])))
   ##
   sampData = rbind(sampData, data.frame(year = i, x = x_loc, y = y_loc))
+
   ##
   proj_df$year = i
   full_proj_df = rbind(full_proj_df, proj_df)
@@ -85,6 +103,11 @@ sampData$region[sampData$x < 50 & sampData$y < 50] = 3
 sampData$region[sampData$x > 50 & sampData$y < 50] = 4
 table(sampData$region)
 
+## match the closest depth variable
+ndx = nn2(proj_df[ ,c("x","y")], sampData[,c("x","y")], k = 1)$nn.idx
+sampData$depth = proj_df$depth[ndx]
+
+
 sampData$fleet_ndx = fleet_ndx 
 head(sampData)
 
@@ -95,7 +118,7 @@ P = Proj$proj$A
 spde = inla.spde2.matern(mesh, alpha = 2)
 
 sampData$area = rlnorm(n, log(0.01 * 0.02), 0.4)
-sampData$eta =  intercept + normalised_year_coef[sampData$year] + normalised_region_coef[sampData$region] + ifelse(sampData$fleet_ndx == 1, 0, fleet_coef[2] - fleet_coef[1])
+sampData$eta =  intercept + normalised_year_coef[sampData$year] + normalised_region_coef[sampData$region] + ifelse(sampData$fleet_ndx == 1, 0, fleet_coef[2] - fleet_coef[1]) + sampData$depth * depth_coef
 sampData$y_i = rgamma(n = nrow(sampData), shape = shape, scale = (sampData$area * exp(sampData$eta)) / shape)
 sampData$catch__per_km_2 = sampData$y_i / sampData$area
 
@@ -109,9 +132,9 @@ coordinates(full_proj_df) <- ~ x + y
 
 ## check they all configure correclty
 simple_spatial_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
-                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                             spatial_covariates = "region", spatial_covariate_type = c("factor"), spline_catchability_covariates = NULL,
-                             spline_spatial_covariates = NULL, trace_level = "high")
+                                     response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
+                                     spatial_covariates = c("region", "depth"), spatial_covariate_type = c("factor", "numeric"), spline_catchability_covariates = NULL,
+                                     spline_spatial_covariates = NULL, trace_level = "high")
 
 simple_spatial_model$obj$fn()
 simple_spatial_model$obj$gr()
@@ -122,7 +145,7 @@ opt_spa = nlminb(simple_spatial_model$obj$par, simple_spatial_model$obj$fn, simp
 rep = simple_spatial_model$obj$report()
 sd_rep = sdreport(simple_spatial_model$obj)
 
-glm_fit_spa = glm(y_i ~ factor(year) + factor(fleet_ndx) + factor(region), offset = log(area), data = sampData, family = Gamma(link = log))
+glm_fit_spa = glm(y_i ~ factor(year) + factor(fleet_ndx) + factor(region) + depth, offset = log(area), data = sampData, family = Gamma(link = log))
 
 ## Compare the fits
 opt_spa$objective 
@@ -162,26 +185,31 @@ contrast_region = glm_coefs[grepl(names(glm_coefs), pattern = "region")]
 reg_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_region)
 # transform so comparible to zero sum coeffecients
 comparible_coefs = rbind(reg_coefs - mean(reg_coefs)
-,rep$spatial_betas)
+                         ,rep$spatial_betas[1:(length(rep$spatial_betas) - 1)])
+
 dimnames(comparible_coefs) = list(c("GLM","CPUEspatial"), paste0("region ", 1:4))
 comparible_coefs
+# depth 
+rep$spatial_betas[length(rep$spatial_betas)]
+glm_coefs[grepl(names(glm_coefs), pattern = "depth")]
+
 # Year coeffecients
 contrast_year = glm_coefs[grepl(names(glm_coefs), pattern = "year")]
 year_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_year)
 comparible_year_coefs = rbind(year_coefs - mean(year_coefs)
-                         ,rep$time_betas)
+                              ,rep$time_betas)
 dimnames(comparible_year_coefs) = list(c("GLM","CPUEspatial"), paste0("year ", 1:10))
 comparible_year_coefs
 
 # fleet This has the intercept term. GLM has intercept based on reference levels
 # where as we have it the mean of factors.
 contrast_catch = glm_coefs[grepl(names(glm_coefs), pattern = "fleet_ndx")]
-fleet_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_fleet)
+catch_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_catch)
 ## 
-cpue_int = fleet_coefs[1] + (mean(year_coefs) - year_coefs[1]) + (mean(reg_coefs) - reg_coefs[1])
+cpue_int = catch_coefs[1] + (mean(year_coefs) - year_coefs[1]) + (mean(reg_coefs) - reg_coefs[1])
 ## all the other catchabilit coeffecients should be the same
 comparible_fleet_coefs = rbind(c(cpue_int, contrast_catch)
-                         ,rep$betas)
+                               ,rep$betas)
 
 dimnames(comparible_fleet_coefs) = list(c("GLM","CPUEspatial"), paste0("Fleet ", 1:3))
 comparible_fleet_coefs
