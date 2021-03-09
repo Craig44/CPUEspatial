@@ -34,11 +34,9 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   DATA_VECTOR( obs_t );        // observations per year
   DATA_IMATRIX( year_ndx_for_each_obs );   // C++ index, dim = [n_t, max(obs_t)]. -999 values indicate to stop reading, this will be a ragged matrix.
   DATA_VECTOR_INDICATOR (keep , y_i);       // NOTICE " keep " this is for OSA residuals
-  DATA_SPARSE_MATRIX( A ) ;               // Sparse matrix that maps, nodes to each observation location
   DATA_STRUCT( spde, spde_t );            // spde object from INLA
-  DATA_SPARSE_MATRIX( Proj ) ;            // Sparse projection matrix maps nodes to each projection grid used in integral
   DATA_VECTOR( Proj_Area ) ;              // Area for each projection grid
-  DATA_INTEGER( family ) ;                // 0 = gaussian, 1 = binomial, 2 = Gamma, 3 = Poisson
+  DATA_INTEGER( family ) ;                // 0 = gaussian, 1 = binomial, 2 = Gamma, 3 = Poisson see inst/HelperFuns.hpp for source code
   DATA_INTEGER( link ) ;                  // 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity
   DATA_MATRIX( time_model_matrix ) ;      // year specific covariates [n_i, n_t]
   DATA_MATRIX( model_matrix ) ;           // model matrix for non spatially related covariates (catcspatialility), month, vessel etc [n_i, p_c], intercept time_model_matrix
@@ -46,11 +44,13 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   DATA_ARRAY( X_spatial_ipt );	// Spatial projection model matrix for preference stuff dimensions = [n_i, p_s, n_t]
   DATA_ARRAY( X_spatial_proj_zpt );	// Spatial projection model matrix for preference stuff dimensions = [n_z, p_s, n_t]
   
+  DATA_INTEGER( omega_indicator );       // is this component estimated in the model? 0 = no, 1 = yes
+  DATA_INTEGER( epsilon_indicator );     // is this component estimated in the model? 0 = no, 1 = yes
+  DATA_IVECTOR( index_data_vertex );     // length n_i, links each data point to a vertex.
+  DATA_IVECTOR( index_proj_vertex );     // length n_p, links each data point to a projecitons grid.
+  
   DATA_VECTOR( pref_coef_bounds );  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
   DATA_INTEGER( apply_pref );       // 0 = no, 1 = yes
-  
-  DATA_INTEGER( omega_indicator );       // 0 = no, 1 = yes
-  DATA_INTEGER( epsilon_indicator );       // 0 = no, 1 = yes
   
   // GAM stuff
   DATA_IVECTOR( spline_flag );                // length(2) spline_flag(0) = catcspatialility factors, spline_flag(1) spatial covariates, 0 no splines, 1 yes splines
@@ -66,6 +66,14 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   DATA_SPARSE_MATRIX( S_spatial );                    //Penalization matrix diag(S1,S2,S3,S4,S5) without storing off-diagonal zeros.
   DATA_IVECTOR( Sdims_spatial );                      //Dimensions of S1,S2,S3,S4 and S5
   DATA_SPARSE_MATRIX( designMatrixForReport_spatial );//Design matrix for report of splines
+  
+  DATA_IARRAY( spatial_constrained_coeff_ndx );       // rows are variables, columns with elements > 0 index coeffecients for spatial_constrained
+  DATA_IVECTOR( spatial_covar_type );                 // one for each row of spatial_constrained_coeff_ndx, 0 = factor, 1 = numeric
+  /* example structure
+   *  0  1   2   3        # categorical variable with 5 levels
+   *  4 -99 -99 -99       # numeric variable   
+   *  5  6   7  -99       # categorical variable with 4 levels
+   */
   
   
   ///////////////
@@ -99,14 +107,44 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   ///////////////////////////
   // Do some internal transformations
   ///////////////////////////
+  int i, t, k, j, obs_ndx;
+  int n_p = Proj_Area.size();
   // un constrain spatial and catcspatialility coeffecients
-  vector<Type> spatial_betas(constrained_spatial_betas.size() + 1);
-  vector<Type> time_betas(constrained_time_betas.size() + 1);
+  vector<Type> spatial_betas(X_spatial_ipt.col(0).cols());
+  spatial_betas.setZero();
+  Type constrained_totals = 0.0;
+  int beta_ndx = 0;
+  for(i = 0; i < spatial_constrained_coeff_ndx.rows(); ++i) {
+    if(spatial_covar_type(i) == 1) {
+      // numeric just a slope coeffecient no transformation needed
+      spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, 0));
+      beta_ndx++;
+    } else {
+      constrained_totals = 0.0;
+      for(j = 0; j < spatial_constrained_coeff_ndx.cols(); ++j) {
+        // if 
+        if((j + 1) >= spatial_constrained_coeff_ndx.cols()) {
+          spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          constrained_totals += constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          ++beta_ndx;
+          spatial_betas(beta_ndx) = -1.0 * constrained_totals;
+          ++beta_ndx;
+          break; // exit this covariate
+        } else if (spatial_constrained_coeff_ndx(i, j) < 0) {
+          spatial_betas(beta_ndx) = -1.0 * constrained_totals;
+          ++beta_ndx;
+          break; // exit this covariate
+        } else {
+          spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          constrained_totals += constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
+          ++beta_ndx;
+        }
+      }
+    }
+  }
   
-  for(int i = 0; i < constrained_spatial_betas.size(); ++i) 
-    spatial_betas(i) = constrained_spatial_betas(i);
-  spatial_betas(spatial_betas.size() - 1) = -1.0 * constrained_spatial_betas.sum();
-  for(int i = 0; i < constrained_time_betas.size(); ++i) 
+  vector<Type> time_betas(constrained_time_betas.size() + 1);
+  for(i = 0; i < constrained_time_betas.size(); ++i) 
     time_betas(i) = constrained_time_betas(i);
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
@@ -121,7 +159,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   vector<Type> epsilon_vec(n_i);                                // temp vector
   vector<Type> spatial_Xbeta(n_i);
   vector<Type> spatial_splines(n_i);
-  vector<Type> omega_i = (A * omega_input) / tau_omega; // maps mesh to observations usign A
+  vector<Type> omega_i(n_i);//                                  // maps mesh to observations usign A
   vector<Type> epsilon_i(n_i);                                  // maps epsilon to observation
   vector<Type> spatial_covariate_i(n_i);                        // Spatail covariates linear
   vector<Type> spline_spatial_i(n_i);                                 // spatial spline contribution 
@@ -132,6 +170,9 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   vector<Type> lambda_spatial = exp(ln_lambda_spatial);
   vector<Type> gamma_i;
   vector<Type> gamma_spatial_i;
+  vector<Type> omega_proj(n_p);
+  vector<Type> epsilon_proj(n_p);
+  vector<Type> spatial_proj(n_p);  
   SparseMatrix<Type> S_i; 
   pref_numerator.setZero();
   pref_denom.setZero();
@@ -139,8 +180,8 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   
   vector<Type> nll(6);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial
   nll.setZero();
+  
   // set some counters
-  int i, t, k;
   // Gaussian field stuff
   Type Range_omega = sqrt(8) / kappa_omega;
   Type MargSD_omega = 1 / sqrt(4*M_PI) / tau_omega / kappa_omega;
@@ -150,24 +191,26 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   // GMRF same range for both omega and epsilon
   SparseMatrix<Type> Q = Q_spde(spde, kappa_omega);
   if (omega_indicator == 1)
-    nll(0) = GMRF(Q)(omega_input);   // Then the density is proportional to |Q|^.5*exp(-.5*x'*Q*x)
+    nll(0) = SCALE(GMRF(Q),  Type(1.0)/ tau_omega)(omega_input);                                 // Then the density is proportional to |Q|^.5*exp(-.5*x'*Q*x)
   
   // Epsilon and spatial map to each observation 
   Q = Q_spde(spde, kappa_epsilon);
+  GMRF_t<Type> gmrf_Q = GMRF(Q);
   for(t = 0; t < epsilon_input.cols(); ++t) {
-    epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
+    epsilon_vec = vector<Type>(epsilon_input.col(t));
     spatial_Xbeta = X_spatial_ipt.col(t).matrix() * spatial_betas;
     spatial_splines = spline_spatial_model_matrix_ipt.col(t).matrix() * gammas_spatial;
     for(i = 0; i < obs_t(t); ++i) {
-      spatial_covariate_i(year_ndx_for_each_obs(t,i)) = spatial_Xbeta(year_ndx_for_each_obs(t,i));
-      epsilon_i(year_ndx_for_each_obs(t,i)) = epsilon_vec(year_ndx_for_each_obs(t,i));
+      obs_ndx = year_ndx_for_each_obs(t,i);
+      spatial_covariate_i(obs_ndx) = spatial_Xbeta(obs_ndx);
+      epsilon_i(obs_ndx) = epsilon_vec(index_data_vertex(obs_ndx));
       if (spline_flag(1) == 1) 
-        spline_spatial_i(year_ndx_for_each_obs(t,i)) = spatial_splines(year_ndx_for_each_obs(t,i));
+        spline_spatial_i(obs_ndx) = spatial_splines(obs_ndx);
     }
     
     // Omega nll contribution
     if (epsilon_indicator == 1)
-      nll(1) += GMRF(Q)(epsilon_input.col(t));
+      nll(1) += SCALE(gmrf_Q, Type(1.0) / tau_epsilon)(epsilon_input.col(t));
     //} else {
     //  nll(1) += gmrf_Q(epsilon_input.col(t) - eps_rho * epsilon_input.col(t-1));
     //}
@@ -208,9 +251,10 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   }
   
   // Numerator for preference log likelihood
-  for(i = 0; i < n_i; ++i)
+  for(i = 0; i < n_i; ++i) {
+    omega_i(i) = omega_input(index_data_vertex(i));
     pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
-  
+  }
   // Systematic Component
   vector<Type> eta =  model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_spatial_i + omega_i + epsilon_i;
   
@@ -258,36 +302,37 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   // deal with location density and projections
   // Location density
   // Projections
-  
-  vector<Type> omega_proj = (Proj * omega_input) / tau_omega;
-  vector<Type> epsilon_proj(omega_proj.size());
+  for(i = 0; i < n_p; ++i)
+    omega_proj(i) = omega_input(index_proj_vertex(i));
   
   // time-varying components
   
   for(t = 0; t < n_t; ++t) {
-    epsilon_vec = epsilon_input.col(t);
-    epsilon_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + (Proj * epsilon_vec) /  tau_epsilon;
+    for(i = 0;i < n_p; ++i)
+      epsilon_proj(i) = epsilon_input(index_proj_vertex(i), t);
+    
+    spatial_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + epsilon_proj;
     if (spline_flag(1) == 1)
-      epsilon_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
+      spatial_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
     
     relative_index(t) = (Proj_Area * exp(time_betas(t) + epsilon_proj)).sum();
     
     
-    pref_denom(t) = log((Proj_Area * exp(pref_coef * epsilon_proj)).sum()); 
+    pref_denom(t) = log((Proj_Area * exp(pref_coef * spatial_proj)).sum()); 
     // deal with Pr(S | W, X) Observations
     if(apply_pref == 1) {
       nll(3) -=  pref_coef * pref_numerator(t) - obs_t(t) * pref_denom(t);
     }
   }
   
-  /*
+  
   // Time-serie
-  Type gmean = Gmean(relative_index);
-  vector<Type> standardised_index = relative_index / Gmean(relative_index);
-  for(i = 0; i < nll.size(); ++i)
-  std::cout << nll(i) << " ";
-  std::cout << std::endl;
-  */
+  //Type gmean = Gmean(relative_index);
+  //vector<Type> standardised_index = relative_index / Gmean(relative_index);
+  //for(i = 0; i < nll.size(); ++i)
+  //std::cout << nll(i) << " ";
+  //std::cout << std::endl;
+  
   
   //////////////////
   // Report section
@@ -311,7 +356,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   REPORT( betas );
   REPORT( spatial_betas );
   REPORT( spatial_splines )
-    REPORT( time_betas );
+  REPORT( time_betas );
   REPORT( relative_index);
   //REPORT( standardised_index );
   //REPORT( gmean );
@@ -322,7 +367,11 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   REPORT( epsilon_i );
   REPORT( spatial_covariate_i );
   REPORT( spline_spatial_i );
+  
   REPORT( omega_proj );
+  REPORT( epsilon_proj );
+  REPORT( spatial_proj );
+  
   REPORT( pref_coef );
   
   REPORT( phi );

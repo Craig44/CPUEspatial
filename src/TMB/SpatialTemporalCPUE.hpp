@@ -107,20 +107,21 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ///////////////////////////
   // Do some internal transformations
   ///////////////////////////
+  int i, t, j, k, obs_ndx;
+  
   // un constrain spatial and catcspatialility coeffecients
   vector<Type> spatial_betas(X_spatial_ipt.col(0).cols());
   spatial_betas.setZero();
   Type constrained_totals = 0.0;
   int beta_ndx = 0;
-  int n_rows =  spatial_constrained_coeff_ndx.rows();
-  for(int i = 0; i < spatial_constrained_coeff_ndx.rows(); ++i) {
+  for(i = 0; i < spatial_constrained_coeff_ndx.rows(); ++i) {
     if(spatial_covar_type(i) == 1) {
       // numeric just a slope coeffecient no transformation needed
       spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, 0));
       beta_ndx++;
     } else {
       constrained_totals = 0.0;
-      for(int j = 0; j < spatial_constrained_coeff_ndx.cols(); ++j) {
+      for(j = 0; j < spatial_constrained_coeff_ndx.cols(); ++j) {
         // if 
         if((j + 1) >= spatial_constrained_coeff_ndx.cols()) {
           spatial_betas(beta_ndx) = constrained_spatial_betas(spatial_constrained_coeff_ndx(i, j));
@@ -143,7 +144,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   }
   
   vector<Type> time_betas(constrained_time_betas.size() + 1);
-  for(int i = 0; i < constrained_time_betas.size(); ++i) 
+  for(i = 0; i < constrained_time_betas.size(); ++i) 
     time_betas(i) = constrained_time_betas(i);
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
@@ -176,8 +177,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   vector<Type> nll(6);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial
   nll.setZero();
+  
   // set some counters
-  int i, t, k;
   // Gaussian field stuff
   Type Range_omega = sqrt(8) / kappa_omega;
   Type MargSD_omega = 1 / sqrt(4*M_PI) / tau_omega / kappa_omega;
@@ -317,14 +318,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     }
   }
   
-  /*
+  
   // Time-serie
-  Type gmean = Gmean(relative_index);
-  vector<Type> standardised_index = relative_index / Gmean(relative_index);
-  for(i = 0; i < nll.size(); ++i)
-  std::cout << nll(i) << " ";
-  std::cout << std::endl;
-  */
+  //Type gmean = Gmean(relative_index);
+  //vector<Type> standardised_index = relative_index / Gmean(relative_index);
+  //for(i = 0; i < nll.size(); ++i)
+  //std::cout << nll(i) << " ";
+  //std::cout << std::endl;
+  
   
   //////////////////
   // Report section

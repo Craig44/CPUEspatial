@@ -73,8 +73,8 @@ text(x = 25, y  = 25, labels = "C", cex = 3)
 text(x = 75, y  = 25, labels = "D", cex = 3)
 year_samples = sample(1:n_years, size = n * n_years, replace = T,  prob = rep(1,n_years) / n_years)
 
-rep_ls = opt_ls = rep_NN_ls = opt_NN_ls = list()
-N_sims = 5
+rep_ls = opt_ls = list()
+N_sims = 100
 for(sim in 1:N_sims) {
   if(sim %% 5 == 0)
     cat("sim = ", sim, "\n")
@@ -139,49 +139,28 @@ for(sim in 1:N_sims) {
   spatial_model_w_omega = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 
                                        response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
                                        spatial_covariates = c("region"), spatial_covariate_type = c("factor"), spline_catchability_covariates = NULL,
-                                       spline_spatial_covariates = NULL, trace_level = "none")
-  
-  spatial_model_w_omega_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 
-                                        response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                                        spatial_covariates = c("region"), spatial_covariate_type = c("factor"), spline_catchability_covariates = NULL,
-                                        spline_spatial_covariates = NULL, linear_basis = 1, trace_level = "none")
-  
+                                       spline_spatial_covariates = NULL, trace_level = "high")
   # tips on debugging
-  # track fixed effect parameters
-  spatial_model_w_omega$obj$env$tracepar = T
-  spatial_model_w_omega_NN$obj$env$tracepar = T
-  ## check no zero gradients or NA evaluations
   spatial_model_w_omega$obj$fn()
-  spatial_model_w_omega_NN$obj$fn()
   spatial_model_w_omega$obj$gr()
-  spatial_model_w_omega_NN$obj$gr()
-  
   names(spatial_model_w_omega$obj$par)[spatial_model_w_omega$obj$gr() == 0]
   which(spatial_model_w_omega$obj$gr() == 0)
   spatial_model_w_omega$obj$par
   opt_spa = nlminb(spatial_model_w_omega$obj$par, spatial_model_w_omega$obj$fn, spatial_model_w_omega$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
-  opt_spa_NN = nlminb(spatial_model_w_omega_NN$obj$par, spatial_model_w_omega_NN$obj$fn, spatial_model_w_omega_NN$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
   rep_omega = spatial_model_w_omega$obj$report()
-  rep_omega_NN = spatial_model_w_omega_NN$obj$report()
-  
-  #sd_rep = sdreport(simple_spatial_model$obj)
-  #sd_rep_NN = sdreport(spatial_model_w_omega_NN$obj)
+  sd_rep = sdreport(simple_spatial_model$obj)
   
   opt_ls[[sim]] = opt_spa
   rep_ls[[sim]] = rep_omega
-  
-  opt_NN_ls[[sim]] = opt_spa_NN
-  rep_NN_ls[[sim]] = rep_omega_NN
 }
 
 est_sd_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$MargSD_omega}))
-est_sd_omega_NN = Reduce(c, lapply(rep_NN_ls, FUN = function(x) {x$MargSD_omega}))
 est_range_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$Range_omega}))
-est_range_omega_NN = Reduce(c, lapply(rep_NN_ls, FUN = function(x) {x$Range_omega}))
 
-boxplot(cbind(est_sd_omega, est_sd_omega_NN), names = c("Triangulation", "Nearest Neighbour"))
+boxplot(est_sd_omega)
 abline(h = sqrt(omega_sigma2), lwd = 3, lty = 2, col = "red")
-boxplot(cbind(est_range_omega, est_range_omega_NN), names = c("Triangulation", "Nearest Neighbour"))
+
+boxplot(est_range_omega)
 abline(h = (omega_range), lwd = 3, lty = 2, col = "red")
 
 glm_fit_spa = glm(y_i ~ factor(year) + factor(fleet_ndx) + factor(region), offset = log(area), data = sampData, family = Gamma(link = log))
@@ -193,11 +172,10 @@ logLik(glm_fit_spa)
 con_ndx_spa_glm = canonical.index(GLM = glm_fit_spa, year = 1990:1999, base  = 1, year.name = "year")
 geo_index = con_ndx_spa_glm$index
 plot(geo_index$year, geo_index$index, type = "l", lwd = 3, xlab = "Year", ylab = "Relative Index", ylim = c(0, 4))
-lines(geo_index$year, rep_omega$relative_index / gm_mean(rep_omega$relative_index), lwd = 3, lty = 2, col = "red")
-lines(geo_index$year, rep_omega_NN$relative_index / gm_mean(rep_omega_NN$relative_index), lwd = 3, lty = 2, col = "blue")
+lines(geo_index$year, rep$relative_index / gm_mean(rep$relative_index), lwd = 3, lty = 2, col = "red")
 arrows(x0 = geo_index$year, x1 = geo_index$year, y0 = geo_index$lower.CI, 
        y1 = geo_index$upper.CI, lwd = 3, angle = 90, length = 0.05, code = 3)
-legend('topright', legend = c("CPUEspatial (NN)", "CPUEspatial (tri)","GLM"), col = c("blue","red","black"), lwd = 3)
+legend('topright', legend = c("CPUEspatial","GLM"), col = c("red","black"), lwd = 3)
 ## manually calculate the dispersion of Gamma log GLM
 1 / summary(glm_fit_spa)$dispersion
 rep$phi

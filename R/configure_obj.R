@@ -18,7 +18,9 @@
 #' @param mesh an inla.mesh object that has been created before this function is applied
 #' @param family 0 = Gaussian, 1 = Binomial, 2 = Gamma, 3 = Poisson 
 #' @param link link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity
+#' @param linear_basis 0 = apply triangulation sparse matrix approach, 1 = Nearest Neighbour
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
+#' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
 #' @importFrom sp coordinates
 #' @importFrom INLA inla.mesh.projector inla.spde2.matern inla.spde.make.A
@@ -29,7 +31,7 @@
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
 configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, catchability_covariate_type = NULL, spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, trace_level = "none") {
+                         spline_spatial_covariates = NULL, linear_basis = 0, trace_level = "none") {
   e1 <- parent.frame()
   if(!trace_level %in% c("none", "low", "medium","high"))
     stop(paste0("trace_level needs to be 'none', 'low', 'medium','high'"))
@@ -215,6 +217,10 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   P = Proj$proj$A
   Proj_area = proj_df_subset@data$area
   
+  proj_vertex_ndx = nn2(mesh$loc[,c(1,2)], coordinates(proj_df_subset), k = 1)$nn.idx
+  data_vertex_ndx = nn2(mesh$loc[,c(1,2)], coordinates(data), k = 1)$nn.idx
+  
+  
   if(trace_level != "none")
     print(paste0("Passed: mapping projection grid to mesh"))
   
@@ -241,6 +247,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(trace_level != "none")
     print(paste0("Passed: projection model matrix construction"))
   
+
   ## Set up TMB object.
   tmb_data <- list(
                model = "SpatialTemporalCPUE",
@@ -283,7 +290,18 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     year_ndx_for_each_obs[t, 1:tmb_data$obs_t[t]] = which(tmb_data$t_i == (t - 1)) - 1
   }
   tmb_data$year_ndx_for_each_obs = year_ndx_for_each_obs
-  
+
+  if(linear_basis == 0) {
+    tmb_data$A = A
+    tmb_data$Proj = P
+    tmb_data$model = "SpatialTemporalCPUE"
+    } else {
+    tmb_data$index_proj_vertex = proj_vertex_ndx - 1 # R index -> C++ index
+    tmb_data$index_data_vertex = data_vertex_ndx - 1 # R index -> C++ index
+    tmb_data$model = "SpatialTemporalCPUENN"
+    
+  }
+
   if(trace_level != "none")
     print(paste0("Passed: TMB data list construction"))
   
@@ -343,8 +361,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   #file.exists(file.path("src","debug_standalone_version.dll"))
   #dyn.load(dynlib(file.path("src","debug_standalone_version")))
   obj = NULL
-  ## create obj
-  to_be_silent = ifelse(trace_level != "none", TRUE, FALSE)
+  ## create ob
+  to_be_silent = ifelse(trace_level == "none", TRUE, FALSE)
   if(include_epsilon & include_omega) {
     obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
   } else if(include_epsilon & !include_omega) {
