@@ -181,7 +181,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   vector<Type> omega_proj(n_p); 
   vector<Type> epsilon_proj(n_p);
   vector<Type> spatial_proj(n_p);  
-  
+
   SparseMatrix<Type> S_i; 
   pref_numerator.setZero();
   pref_denom.setZero();
@@ -337,7 +337,6 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     
     relative_index(t) = (Proj_Area * exp(time_betas(t) + spatial_proj)).sum();
     
-    
     if(LCGP_approach == 0) 
       pref_denom(t) = log((Proj_Area * exp(pref_coef * spatial_proj)).sum()); 
     // deal with Pr(S | W, X) Observations
@@ -384,7 +383,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( betas );
   REPORT( spatial_betas );
   REPORT( spatial_splines )
-    REPORT( time_betas );
+  REPORT( time_betas );
   REPORT( relative_index);
   //REPORT( standardised_index );
   //REPORT( gmean );

@@ -11,6 +11,7 @@ library(RANN)
 library(ggplot2)
 library(mgcv) 
 library(spatstat)
+library(DHARMa)
 source(file.path("inst","examples","canonical.index.R"))
 
 gm_mean = function(x, na.rm=TRUE){
@@ -237,105 +238,22 @@ rep_opt_omega_NN_pref_din$Range_omega
 rep_opt_omega_pref_lgcp$Range_omega
 rep_opt_omega_NN_pref_lgcp$Range_omega
 
+## spatial plots
+proj_omega_din = get_projection(obj = spatial_model_w_omega_w_pref_din$obj, data = spatial_model_w_omega_w_pref_din$tmb_data, projection_df = full_proj_df, time_variable_label = "year")
+proj_omega_NN_din = get_projection(obj = spatial_model_w_omega_NN_w_pref_din$obj, data = spatial_model_w_omega_NN_w_pref_din$tmb_data, projection_df = full_proj_df, time_variable_label = "year")
+z_range = range(proj_omega_din$predicted_y)
+z_range_NN = range(proj_omega_NN_din$predicted_y)
+
+## goodness of fits
+rep_opt_omega_pref_din = spatial_model_w_omega_w_pref_din$obj$report()
+rep_opt_omega_NN_pref_din = spatial_model_w_omega_NN_w_pref_din$obj$report()
+rep_opt_omega_pref_lgcp = spatial_model_w_omega_w_pref_lgcp$obj$report()
+rep_opt_omega_NN_pref_lgcp = spatial_model_w_omega_NN_w_pref_lgcp$obj$report()
+
+sim_data_omega_w_pref_din = simulate_data(spatial_model_w_omega_w_pref_din$obj, n_sims = 100, fixed_effect = 1, random_effect = 0)
+sim_data_omega_NN_w_pref_din = simulate_data(spatial_model_w_omega_NN_w_pref_din$obj, n_sims = 100, fixed_effect = 1, random_effect = 0)
+sim_data_omega_w_pref_lgcp = simulate_data(spatial_model_w_omega_w_pref_lgcp$obj, n_sims = 100, fixed_effect = 1, random_effect = 0)
+sim_data_omega_NN_w_pref_lgcp = simulate_data(spatial_model_w_omega_NN_w_pref_lgcp$obj, n_sims = 100, fixed_effect = 1, random_effect = 0)
+## use DHARMa package for test-statistics
 
 
-est_sd_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$MargSD_omega}))
-est_sd_omega_NN = Reduce(c, lapply(rep_NN_ls, FUN = function(x) {x$MargSD_omega}))
-est_range_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$Range_omega}))
-est_range_omega_NN = Reduce(c, lapply(rep_NN_ls, FUN = function(x) {x$Range_omega}))
-
-boxplot(cbind(est_sd_omega, est_sd_omega_NN), names = c("Triangulation", "Nearest Neighbour"))
-abline(h = sqrt(omega_sigma2), lwd = 3, lty = 2, col = "red")
-boxplot(cbind(est_range_omega, est_range_omega_NN), names = c("Triangulation", "Nearest Neighbour"))
-abline(h = (omega_range), lwd = 3, lty = 2, col = "red")
-
-glm_fit_spa = glm(y_i ~ factor(year) + factor(fleet_ndx) + factor(region), offset = log(area), data = sampData, family = Gamma(link = log))
-
-## Compare the fits
-opt_spa$objective 
-logLik(glm_fit_spa)
-## get year indes
-con_ndx_spa_glm = canonical.index(GLM = glm_fit_spa, year = 1990:1999, base  = 1, year.name = "year")
-geo_index = con_ndx_spa_glm$index
-plot(geo_index$year, geo_index$index, type = "l", lwd = 3, xlab = "Year", ylab = "Relative Index", ylim = c(0, 4))
-lines(geo_index$year, rep_omega$relative_index / gm_mean(rep_omega$relative_index), lwd = 3, lty = 2, col = "red")
-lines(geo_index$year, rep_omega_NN$relative_index / gm_mean(rep_omega_NN$relative_index), lwd = 3, lty = 2, col = "blue")
-arrows(x0 = geo_index$year, x1 = geo_index$year, y0 = geo_index$lower.CI, 
-       y1 = geo_index$upper.CI, lwd = 3, angle = 90, length = 0.05, code = 3)
-legend('topright', legend = c("CPUEspatial (NN)", "CPUEspatial (tri)","GLM"), col = c("blue","red","black"), lwd = 3)
-## manually calculate the dispersion of Gamma log GLM
-1 / summary(glm_fit_spa)$dispersion
-rep$phi
-AIC = 2*opt_spa$objective + 2*length(simple_spatial_model$obj$par)
-
-## influence plots
-#myInfl = Influence$new(glm_fit_spa)
-#myInfl$calc()
-attr(glm_fit_spa, "family")
-attributes(glm_fit_spa)
-
-
-# Diagnostics
-obs_fit_df = data.frame(obs = sampData$y_i, glm = fitted.values(glm_fit_spa), CPUEspatial = rep$mu)
-round(head(obs_fit_df),3)
-
-plot(obs_fit_df$obs, obs_fit_df$glm , pch = 16, xlab = "Observed", ylab = "Fitted")
-points(obs_fit_df$obs, obs_fit_df$CPUEspatial, pch = 16, col = "red", cex = 0.6)
-legend('topright', legend = c("CPUEspatial","GLM"), col = c("red","black"), pch = 16)
-
-## compare estiamted coeffecients
-glm_coefs = coefficients(glm_fit_spa)
-contrast_region = glm_coefs[grepl(names(glm_coefs), pattern = "region")]
-reg_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_region)
-# transform so comparible to zero sum coeffecients
-comparible_coefs = rbind(reg_coefs - mean(reg_coefs)
-                         ,rep$spatial_betas[1:(length(rep$spatial_betas) )])
-
-dimnames(comparible_coefs) = list(c("GLM","CPUEspatial"), paste0("region ", 1:4))
-comparible_coefs
-# depth 
-rep$spatial_betas[length(rep$spatial_betas)]
-glm_coefs[grepl(names(glm_coefs), pattern = "depth")]
-
-# Year coeffecients
-contrast_year = glm_coefs[grepl(names(glm_coefs), pattern = "year")]
-year_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_year)
-comparible_year_coefs = rbind(year_coefs - mean(year_coefs)
-                              ,rep$time_betas)
-dimnames(comparible_year_coefs) = list(c("GLM","CPUEspatial"), paste0("year ", 1:10))
-comparible_year_coefs
-
-# fleet This has the intercept term. GLM has intercept based on reference levels
-# where as we have it the mean of factors.
-contrast_catch = glm_coefs[grepl(names(glm_coefs), pattern = "fleet_ndx")]
-catch_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_catch)
-## 
-cpue_int = catch_coefs[1] + (mean(year_coefs) - year_coefs[1]) + (mean(reg_coefs) - reg_coefs[1])
-## all the other catchabilit coeffecients should be the same
-comparible_fleet_coefs = rbind(c(cpue_int, contrast_catch)
-                               ,rep$betas)
-
-dimnames(comparible_fleet_coefs) = list(c("GLM","CPUEspatial"), paste0("Fleet ", 1:3))
-comparible_fleet_coefs
-
-## plot spline effects
-sm <- evaluate_smooth(glm_fit_spa, "s(spline_var)")
-sm[["upper"]] <- sm[["est"]] + (2 * sm[["se"]])
-sm[["lower"]] <- sm[["est"]] - (2 * sm[["se"]])
-sm$true = sin(sm$spline_var)
-plt <- ggplot(sm, aes_string(x = "spline_var", y = "est")) +
-  geom_line(size = 2) +
-  geom_ribbon(mapping = aes_string(ymin = "lower", ymax = "upper"), alpha = 0.2) + 
-  geom_line(aes(y = true), color="steelblue", size = 2, linetype="twodash") 
-plt
-DF = data.frame(spline_var = seq(min(sampData[,"spline_var"]), max(sampData[,"spline_var"]), by = diff(range(sampData[,"spline_var"])) / 50));
-DF$CPUEspatial = rep$splineForReport_spatial
-plt_alt = plt +
-  geom_line(data = DF, aes(x = spline_var, y = CPUEspatial), color="red", linetype="twodash", size = 2, inherit.aes = F) 
-plt_alt
-## TODO add a legend
-
-
-## look at th GF parameters
-rep_omega$MargSD_omega
-rep_omega$Range_omega

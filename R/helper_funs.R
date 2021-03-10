@@ -12,6 +12,32 @@ evalit = function (x, ...)  {
   eval(parse(text = x), ...)
 }
 
+#' inverse_link
+#' @details applies the inverse of the link function
+#' log_link                 = 0
+#' logit_link               = 1
+#' probit_link              = 2
+#' inverse_link             = 3
+#' identity_link            = 4
+#' @param x a vector of values to transform
+#' @param link_fun integer based on the above
+#' @keywords internal
+#' @return 
+inverse_link = function (x, link_fun) {
+  return_val = x; ## default identity link
+  if(link_fun == 0) {
+    return_val = exp(x)
+  } else if(link_fun == 1) {
+    return_val = plogis(x)
+  } else if(link_fun == 2) {
+    return_val = pnorm(x)
+  } else if(link_fun == 3) {
+    return_val = pnorm(x)
+  } else if(link_fun == 4) {
+    # do nothing identiy link
+  }
+  return(return_val);
+}
 
 #' logit_general 
 #' @details bounds X which is between [lb,ub] to -inf -> inf based on the logit transformation

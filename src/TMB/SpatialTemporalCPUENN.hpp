@@ -1,6 +1,7 @@
 /*
- * The idea is it follows, something like https://github.com/pconn/pref_sampling/blob/master/pref_sampling/src/PrefSampling.cpp
- * 
+ * TMB source code for a univariate geostatistical CPUE model.
+ * This source code applies nearest neighbour approach for the GF
+ *   
  */
 #ifndef SpatialTemporalCPUE_NN_hpp
 #define SpatialTemporalCPUE_NN_hpp
@@ -403,8 +404,8 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   REPORT( spline_spatial_i );
   
   REPORT( omega_proj );
-  REPORT( epsilon_proj );
-  REPORT( spatial_proj );
+  //REPORT( epsilon_proj ); // shouldn't report as these are time dependent so wouldn't make sense to report this to users
+  //REPORT( spatial_proj );
   
   REPORT( pref_coef );
   
