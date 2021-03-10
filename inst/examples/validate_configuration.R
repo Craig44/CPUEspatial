@@ -199,6 +199,7 @@ mesh = mesh
 family = 3
 link = 0
 trace_level = "none"
+linear_basis = 0
 warnings()
 
 detach("package:CPUEspatial", unload=TRUE)

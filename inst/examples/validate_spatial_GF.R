@@ -74,8 +74,9 @@ text(x = 75, y  = 25, labels = "D", cex = 3)
 year_samples = sample(1:n_years, size = n * n_years, replace = T,  prob = rep(1,n_years) / n_years)
 
 rep_ls = opt_ls = rep_NN_ls = opt_NN_ls = list()
-N_sims = 5
-for(sim in 1:N_sims) {
+#N_sims = 5
+#for(sim in 1:N_sims) {
+sim = 1
   if(sim %% 5 == 0)
     cat("sim = ", sim, "\n")
   ## Simulate sample locations based on population spatial distribution
@@ -172,7 +173,7 @@ for(sim in 1:N_sims) {
   
   opt_NN_ls[[sim]] = opt_spa_NN
   rep_NN_ls[[sim]] = rep_omega_NN
-}
+#}
 
 est_sd_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$MargSD_omega}))
 est_sd_omega_NN = Reduce(c, lapply(rep_NN_ls, FUN = function(x) {x$MargSD_omega}))

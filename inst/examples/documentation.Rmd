@@ -110,3 +110,45 @@ I_t = \sum\limits_{s = 1}^{n_s} a_s g^{-1}\left(\beta^t_t + \boldsymbol{\tilde{X
 \end{equation}
 
 where, \( a_s\) is the area of cell \(s\) and \(\boldsymbol{\tilde{X}_s^s}\) is the model matrix for the spatial covariates at area \(s\) (these covariates need to be known over the entire spatial domain), and \(\beta^t_t\) are the time specific coefficients.
+
+
+## Configuration
+
+### Gaussian Field interpolation {-}
+CPUE analysis can involve large data-sets. When dealing with large data-sets geostatistical models can run into memory issues. i.e the following error 
+
+
+There are a few options in the package to address this issue. The first relates to the basis functions for extrapolating the vertex points over the spatial domain (Equation~\ref{eq:basis}). There are two options, which are defined in the function `configure_obj()` with the input parameter `linear_basis`. When `linear_basis = 0` Equation~\ref{eq:basis} is applied where a weight for each vertex for a point wihtin a given triangulation is applied. This is done with sparse matrix operations i.e. if there are \(n_k\) verticies, rows will only contain \(n_k - 3\) possible nonzero entries. Although should be quick, becuase of the sparse matrix applications, can be memory intensive. 
+
+The second approach `linear_basis = 1` uses the nearest neighbour approach. Where any location over the spatial domain is assigned the vertex value based on the shortest distance. This will create more of a discrete field. I am unsure on the computational benefits from this approach, but is definitley less memory intensive. This follows the approach used in VAST.
+
+### Preferential Sampling {-}
+During my PhD I looked at modelling the joint distribution of sample locations with the underlying response variable using spatial latent variable models in the context of CPUE analysis. Basically the idea is obtain \enquote{information} on the underlying biomass by linking fishing location with the underlying biomass. That is fishers are expected to fish in locations with good catch rates. If this is relationship is true, then there is information in location where it is modelled as a random variable conditional on the spatial GF (A note you can only apply this when you have specified a GF component).
+
+#### Dinsdale approach {-}
+The dinsdale approach is based on the Thesis of Dinsdale which applies an inhomogeneous Poisson point process. Assuming `apply_preferential_sampling = TRUE` this is applied by `preference_model_type = 0`. The density of sample location denoted by \(\boldsymbol{s}\) conditional on a GF denoted by \(\boldsymbol{u(s)}\) within the sample domain \((\Omega)\),
+
+\begin{equation}
+  Pr[\boldsymbol{s} | \boldsymbol{u(s)}] = \frac{\lambda\left(\boldsymbol{s}\right)}{\Lambda} \approx  \prod\limits_{i = 1}^n \frac{\lambda\left(s_i\right)}{\sum\limits_{j = 1}^{n_s} a_j\lambda\left(s_j\right)}
+\end{equation}
+where the intensity function (density of points) denoted by \(\lambda(s)\) that depends on a GF.
+with \(\Lambda = \int_{\Omega} \lambda(\boldsymbol{s}) ds\).
+
+\begin{align}
+	H(s) &= \boldsymbol{X^s}\boldsymbol{\beta^s} + \omega(\boldsymbol{s}) + \epsilon(\boldsymbol{s},t)\\
+	\lambda(s) &= exp\{\beta^{pref} H(s)\}
+\end{align}
+
+
+#### Log-Gaussian Cox Process approach {-}
+The second approach applies a Log-Gaussian cox process. Assuming `apply_preferential_sampling = TRUE` this is applied by `preference_model_type = 1`. This also is conditional on a GF and has an intensity function defined as
+\begin{align}
+	H(s) &= \boldsymbol{X^s}\boldsymbol{\beta^s} + \omega(\boldsymbol{s}) + \epsilon(\boldsymbol{s},t)\\
+	\lambda(s) &= exp\{\alpha^{pp} + \beta^{pref} H(s)\}
+\end{align}
+The denisty is 
+\begin{equation}\label{eq:IPP_dens}
+\pi(\mathcal{S}|\lambda) = exp\bigg(|D| - \int_{D}\lambda(s) ds \bigg)\prod_{s_i \in \mathcal{S}} \lambda(s_i)
+\end{equation}
+The common approach for Cox models, is to create a fine lattice over the observation window \((\Omega)\) and then model the number of points in cell \(s_{ij}\) (\(N_{ij}\) ) of the lattice. \(N_{ij} \sim Po(\Lambda_{ij})\) where, \(\Lambda_{ij} = \int_{s_{ij}}\lambda(s)ds\). Again back to an intractable integral so the approximated is made where, \(\Lambda_{ij} \approx |s_{ij}|exp(z_{ij})\), where \(z_{ij}\) is a representative value of \(Z(s)\) and \(|s_{ij}\) is the area of the cell. An alternative approach is to use the dual mesh from the Simpson et.al. 2016 paper (I ran into issues with this approach).
+

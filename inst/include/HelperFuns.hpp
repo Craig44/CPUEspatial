@@ -14,8 +14,9 @@ enum valid_link {
 enum valid_family {
   gaussian_family = 0,
   binomial_family = 1,
-  Gamma_family    = 2,
-  poisson_family  = 3
+  gamma_family    = 2,
+  poisson_family  = 3,
+  negative_binomial_family = 4
 };
 /*
 * isNA

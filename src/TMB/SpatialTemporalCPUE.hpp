@@ -49,8 +49,10 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   DATA_VECTOR( pref_coef_bounds );  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
   DATA_INTEGER( apply_pref );       // 0 = no, 1 = yes
+  DATA_ARRAY( Nij );                // number of observations in each each Proj cell dim[n_p, n_t]
+  DATA_INTEGER( LCGP_approach );    // 0 Dinsdale approach, 1 = LGCP lattice approach
   
-  DATA_INTEGER( omega_indicator );       // 0 = no, 1 = yes
+  DATA_INTEGER( omega_indicator );         // 0 = no, 1 = yes
   DATA_INTEGER( epsilon_indicator );       // 0 = no, 1 = yes
   
   // GAM stuff
@@ -76,6 +78,10 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
    *  5  6   7  -99       # categorical variable with 4 levels
    */
 
+  
+  // Simulate switches
+  DATA_INTEGER( simulate_GF );                        // do you want to redraw a completely new GF? 0 = no, 1 = yes
+  
   ///////////////
   // Parameters
   ///////////////
@@ -85,16 +91,17 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   PARAMETER_VECTOR( constrained_time_betas );         // p_t = n_t in length coeffecients for time step
   
   // nuisance parameters
-  PARAMETER(ln_phi);                      // variance parameter for y_dist turn off for distributions such as Poisson.
+  PARAMETER(ln_phi);                            // variance/dispersion parameter for y_dist turn off for distributions such as Poisson.
   // Preference Model
-  PARAMETER(logit_pref_coef);                    // preferential parameter
+  PARAMETER(logit_pref_coef);                   // preferential parameter logistic transformation
+  PARAMETER(lgcp_intercept);                    // intercept for the Log-Gaussian Cox Process Point process 
   // GMRF 
   PARAMETER( ln_kappa_omega );                  // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
   PARAMETER( ln_tau_omega );                    // eta := kappa * tau, parameterisaton from https://github.com/nwfsc-assess/geostatistical_delta-GLMM/blob/master/inst/executables/geo_index_v4b.cpp
   PARAMETER( ln_kappa_epsilon );                // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
   PARAMETER( ln_tau_epsilon );                  // eta := kappa * tau, parameterisaton from https://github.com/nwfsc-assess/geostatistical_delta-GLMM/blob/master/inst/executables/geo_index_v4b.cpp
   
-  PARAMETER(logit_eps_rho);               // Auto correlation parameter for Spatial temporal effect
+  PARAMETER(logit_eps_rho);                     // Auto correlation parameter for Spatial temporal effect
   // Random effects - marginalised out
   PARAMETER_VECTOR( omega_input );              // spatial random effects for each vertix n_x
   PARAMETER_ARRAY( epsilon_input );             // spatial temporal random effects for each vertix [n_x x n_t]
@@ -108,6 +115,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // Do some internal transformations
   ///////////////////////////
   int i, t, j, k, obs_ndx;
+  int n_p = Proj_Area.size();
   
   // un constrain spatial and catcspatialility coeffecients
   vector<Type> spatial_betas(X_spatial_ipt.col(0).cols());
@@ -159,7 +167,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   vector<Type> epsilon_vec(n_i);                                // temp vector
   vector<Type> spatial_Xbeta(n_i);
   vector<Type> spatial_splines(n_i);
-  vector<Type> omega_i = (A * omega_input) / tau_omega; // maps mesh to observations usign A
+  vector<Type> omega_i(n_i);                                    // maps mesh to observations usign A
   vector<Type> epsilon_i(n_i);                                  // maps epsilon to observation
   vector<Type> spatial_covariate_i(n_i);                        // Spatail covariates linear
   vector<Type> spline_spatial_i(n_i);                                 // spatial spline contribution 
@@ -170,6 +178,10 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   vector<Type> lambda_spatial = exp(ln_lambda_spatial);
   vector<Type> gamma_i;
   vector<Type> gamma_spatial_i;
+  vector<Type> omega_proj(n_p); 
+  vector<Type> epsilon_proj(n_p);
+  vector<Type> spatial_proj(n_p);  
+  
   SparseMatrix<Type> S_i; 
   pref_numerator.setZero();
   pref_denom.setZero();
@@ -187,12 +199,25 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   // GMRF same range for both omega and epsilon
   SparseMatrix<Type> Q = Q_spde(spde, kappa_omega);
-  if (omega_indicator == 1)
+  if (omega_indicator == 1) {
+    SIMULATE{
+      if(simulate_GF == 1) 
+        omega_input = GMRF(Q).simulate();
+    }
     nll(0) = GMRF(Q)(omega_input);   // Then the density is proportional to |Q|^.5*exp(-.5*x'*Q*x)
-  
+  }
+  omega_i = (A * omega_input) / tau_omega;
+  omega_proj = (Proj * omega_input) / tau_omega;
   // Epsilon and spatial map to each observation 
   Q = Q_spde(spde, kappa_epsilon);
   for(t = 0; t < epsilon_input.cols(); ++t) {
+    if (epsilon_indicator == 1) {
+      nll(1) += GMRF(Q)(epsilon_input.col(t));
+      SIMULATE{
+        if(simulate_GF == 1) 
+          epsilon_input.col(t) = GMRF(Q).simulate();
+      }
+    }
     epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
     spatial_Xbeta = X_spatial_ipt.col(t).matrix() * spatial_betas;
     spatial_splines = spline_spatial_model_matrix_ipt.col(t).matrix() * gammas_spatial;
@@ -202,18 +227,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
       if (spline_flag(1) == 1) 
         spline_spatial_i(year_ndx_for_each_obs(t,i)) = spatial_splines(year_ndx_for_each_obs(t,i));
     }
-    
-    // Omega nll contribution
-    if (epsilon_indicator == 1)
-      nll(1) += GMRF(Q)(epsilon_input.col(t));
     //} else {
     //  nll(1) += gmrf_Q(epsilon_input.col(t) - eps_rho * epsilon_input.col(t-1));
     //}
+    //nll(1) = SEPARABLE(AR1(eps_rho), GMRF(Q))(Epsilon_input);   // AR(1)
   }
-  //nll(1) = SEPARABLE(AR1(eps_rho), GMRF(Q))(Epsilon_input);   // AR(1)
+  
   
   // Spline stuff catcspatialility splines
-  
   if (spline_flag(0) == 1) {
     k = 0;
     for( i = 0;i < Sdims.size(); i++){
@@ -246,9 +267,10 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   }
   
   // Numerator for preference log likelihood
-  for(i = 0; i < n_i; ++i)
-    pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
-  
+  if(LCGP_approach == 0) {
+    for(i = 0; i < n_i; ++i)
+      pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
+  }
   // Systematic Component
   vector<Type> eta =  model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_spatial_i + omega_i + epsilon_i;
   
@@ -279,11 +301,21 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
         tmp_loglik = dbinom_robust(y_i(i), Type(1), mu(i), true);
         SIMULATE{y_i(i) = rbinom(Type(1), mu(i));}
         break;
-      case Gamma_family:
+      case gamma_family:
         s1 = phi;           // shape
         s2 = mu(i) / phi;   // scale
         tmp_loglik = dgamma(y_i(i), s1, s2, true);
         SIMULATE{y_i(i) = rgamma(s1, s2);}
+        break;
+      case negative_binomial_family:
+        s1 = log(mu(i));                       // log(mu)
+        s2 = 2. * s1 - ln_phi;                 // log(var - mu)
+        tmp_loglik = dnbinom_robust(y_i(i), s1 , s2, true);
+        SIMULATE {
+          s1 = mu(i);  
+          s2 = mu(i) * (1.0 + phi);  
+          y_i(i) = rnbinom2(s1, s2);
+        }
         break;
       default:
         error("Family not implemented!");
@@ -296,25 +328,26 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // deal with location density and projections
   // Location density
   // Projections
-  
-  vector<Type> omega_proj = (Proj * omega_input) / tau_omega;
-  vector<Type> epsilon_proj(omega_proj.size());
-  
   // time-varying components
-  
   for(t = 0; t < n_t; ++t) {
-    epsilon_vec = epsilon_input.col(t);
-    epsilon_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + (Proj * epsilon_vec) /  tau_epsilon;
+    epsilon_proj = epsilon_input.col(t);
+    spatial_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + (Proj * epsilon_proj) /  tau_epsilon;
     if (spline_flag(1) == 1)
-      epsilon_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
+      spatial_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
     
-    relative_index(t) = (Proj_Area * exp(time_betas(t) + epsilon_proj)).sum();
+    relative_index(t) = (Proj_Area * exp(time_betas(t) + spatial_proj)).sum();
     
     
-    pref_denom(t) = log((Proj_Area * exp(pref_coef * epsilon_proj)).sum()); 
+    if(LCGP_approach == 0) 
+      pref_denom(t) = log((Proj_Area * exp(pref_coef * spatial_proj)).sum()); 
     // deal with Pr(S | W, X) Observations
     if(apply_pref == 1) {
-      nll(3) -=  pref_coef * pref_numerator(t) - obs_t(t) * pref_denom(t);
+      if(LCGP_approach == 0) {
+        nll(3) -=  pref_coef * pref_numerator(t) - obs_t(t) * pref_denom(t);
+      } else if(LCGP_approach == 1) {
+        for(i = 0;i < n_p; ++i)
+          nll(3) -= dpois(Nij(i, t), Proj_Area(i) * exp(lgcp_intercept + pref_coef * spatial_proj(i)), true); 
+      }
     }
   }
   
@@ -326,7 +359,9 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   //std::cout << nll(i) << " ";
   //std::cout << std::endl;
   
-  
+  SIMULATE {
+    REPORT(y_i);
+  }
   //////////////////
   // Report section
   //////////////////

@@ -16,9 +16,11 @@
 #' @param spline_spatial_covariates vector of strings
 #' @param projection_df a data.frame needs to have the same variable names (colnames) as data. Should supply variable values for all projection cells over all time steps
 #' @param mesh an inla.mesh object that has been created before this function is applied
-#' @param family 0 = Gaussian, 1 = Binomial, 2 = Gamma, 3 = Poisson 
+#' @param family 0 = Gaussian, 1 = Binomial, 2 = Gamma, 3 = Poisson, 4 = Negative Binomial
 #' @param link link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity
 #' @param linear_basis 0 = apply triangulation sparse matrix approach, 1 = Nearest Neighbour
+#' @param apply_preferential_sampling whether to jointly model observation location 
+#' @param preference_model_type integer 0 = Dinsdale approach, 1 = LGCP lattice approach
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
 #' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
@@ -28,10 +30,11 @@
 #' @importFrom TMB MakeADFun
 #' @importFrom mgcv gam PredictMat
 #' @importFrom Matrix .bdiag
+#' @importFrom raster raster rasterize crs
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
 configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, catchability_covariate_type = NULL, spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, linear_basis = 0, trace_level = "none") {
+                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, trace_level = "none") {
   e1 <- parent.frame()
   if(!trace_level %in% c("none", "low", "medium","high"))
     stop(paste0("trace_level needs to be 'none', 'low', 'medium','high'"))
@@ -49,6 +52,11 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     stop(paste0("catchability_covariates needs to be length catchability_covariate_type"))
   if(length(spatial_covariates) != length(spatial_covariate_type))
     stop(paste0("spatial_covariates needs to be length spatial_covariate_type"))
+  
+  # check projections are the same.
+  #if(is.na(attr(crs(projection_df), "projargs") != attr(crs(data), "projargs")) attr(crs(projection_df), "projargs") != attr(crs(data), "projargs"))
+  #  stop(paste0("projection_df and data need to have the same crs projection system, please check raster::crs() for both these objects"))
+
   vars_needed = c(response_variable_label, time_variable_label, catchability_covariates, spatial_covariates, spline_spatial_covariates, "area")
   proj_vars_needed = c(response_variable_label, time_variable_label, spatial_covariates, "area")
   # get response variable
@@ -208,11 +216,18 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   X_spatial_ipt = array(1, dim = c(n, ncol(data_spatial_model_matrix), n_t))
   spline_spatial_model_matrix_proj_zpt = array(0, dim = c(n_z, ncol(spline_spatial_$X[,-1]), n_t))
   spline_spatial_model_matrix_ipt = array(spline_spatial_$X[,-1], dim = c(n, ncol(spline_spatial_$X[,-1]), n_t))
+  Nij = array(0, dim = c(n_z, n_t))
   
   
   ## map mesh to extrapolation grid. Assumes projection_df has the same spatial cell for all time-cells
   ## so need to define the projector just for a single time-step
   proj_df_subset = subset(projection_df, subset = projection_df@data[,time_variable_label] == time_levels[1])
+  x_proj = unique(coordinates(proj_df_subset)[,1])
+  y_proj = unique(coordinates(proj_df_subset)[,2])
+  ## assumes equal sized square projection cells...
+  proj_raster = raster(nrows = length(y_proj), ncols = length(x_proj), xmn = min(x_proj), xmx = max(x_proj), ymn = min(y_proj), ymx = max(y_proj), crs = crs(projection_df))
+
+  
   Proj <- inla.mesh.projector(mesh, loc = coordinates(proj_df_subset))
   P = Proj$proj$A
   Proj_area = proj_df_subset@data$area
@@ -226,6 +241,15 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   
   for(t in 1:n_t) {
     proj_df_subset <- subset(projection_df@data, subset = projection_df@data[,time_variable_label] == time_levels[t])
+    data_df_subset <- subset(data, subset = data@data[,time_variable_label] == time_levels[t])
+    data_df_subset@data$indicator = 1
+    proj_count <- rasterize(data_df_subset, proj_raster, field = data_df_subset$indicator, sum, na.rm = T)
+    # validate binning
+    #plot(proj_count)
+    #points(coordinates(data_df_subset), pch = 16, col = adjustcolor(col = "red", alpha.f = 0.2))
+    Nij[,t] = proj_count$layer@data@values
+    Nij[,t][is.na(Nij[,t])] = 0
+    
     if(length(spatial_covariates) > 0) {
       data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = data@data)"), e1)
       ff <- evalit(paste0(response_variable_label," ~ 0 + ", paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + ")), e1)
@@ -247,7 +271,6 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(trace_level != "none")
     print(paste0("Passed: projection model matrix construction"))
   
-
   ## Set up TMB object.
   tmb_data <- list(
                model = "SpatialTemporalCPUE",
@@ -263,12 +286,14 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
                Proj_Area = Proj_area,
                family = family,
                link = link,
-               pref_coef_bounds = c(-0.001, 5),
+               pref_coef_bounds = c(-5, 5), ## perhaps make a user input, can be a difficult parameter to estimate
+               Nij = Nij,
+               apply_pref = ifelse(apply_preferential_sampling, 1, 0),
+               LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
                model_matrix = model_matrix,
                time_model_matrix = time_model_matrix,
                X_spatial_ipt = X_spatial_ipt,
                X_spatial_proj_zpt = X_spatial_proj_zpt,
-               apply_pref = 0,
                omega_indicator = ifelse(include_omega, 1, 0),
                epsilon_indicator = ifelse(include_epsilon, 1, 0),
                spline_flag = c(ifelse(length(spline_catchability_covariates) > 0, 1, 0), ifelse(length(spline_spatial_covariates) > 0, 1, 0)),
@@ -282,7 +307,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
                Sdims_spatial = S_spatial_dims,
                designMatrixForReport_spatial = S_spatial_design_matrix,
                spatial_constrained_coeff_ndx = spatial_constrained_coeff_ndx,
-               spatial_covar_type = spatial_covar_type 
+               spatial_covar_type = spatial_covar_type,
+               simulate_GF = 0
                
   )
   year_ndx_for_each_obs = matrix(-99, nrow = tmb_data$n_t, ncol = max(tmb_data$obs_t))
@@ -313,13 +339,14 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     betas = rep(0, ncol(tmb_data$model_matrix)),
     constrained_spatial_betas = rep(0, max(tmb_data$spatial_constrained_coeff_ndx) + 1),
     constrained_time_betas = rep(0, max(dim(tmb_data$time_model_matrix)[2] - 1,1)),
-    ln_kappa_epsilon = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
-    ln_kappa_omega = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
-    ln_tau_epsilon =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
-    ln_tau_omega =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
-    logit_pref_coef = logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]),
-    logit_eps_rho = logit_general(0, -0.99, 0.99),
     ln_phi = 0,
+    logit_pref_coef = logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]),
+    lgcp_intercept = 0,
+    ln_kappa_omega = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
+    ln_tau_omega =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
+    ln_kappa_epsilon = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
+    ln_tau_epsilon =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
+    logit_eps_rho = logit_general(0, -0.99, 0.99),
     omega_input = rep(0,spde$n.spde),
     epsilon_input = array(0,dim = c(spde$n.spde, tmb_data$n_t)),
     gammas = rep(0,sum(tmb_data$Sdims)),  # Spline coefficients
@@ -337,7 +364,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     return(list(errors = any_errors$errors, tmb_pars = params, tmb_data = tmb_data))
   }
   ## set which parameters are being estimated and which are held constant.drr
-  pars_to_fix = c("logit_pref_coef","logit_eps_rho")
+  pars_to_fix = c("logit_eps_rho")
   if(!include_epsilon)
     pars_to_fix = c(pars_to_fix, "epsilon_input", "ln_kappa_epsilon", "ln_tau_epsilon")
   if(!include_omega)
@@ -352,10 +379,19 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(family %in% c(0))
     pars_to_fix = c(pars_to_fix, "ln_phi")
 
+
+  if (apply_preferential_sampling) {
+    if(preference_model_type == 0)
+      pars_to_fix = c(pars_to_fix, "lgcp_intercept")
+  } else {
+    pars_to_fix = c(pars_to_fix, "logit_pref_coef","lgcp_intercept")
+  }
+
   fixed_pars = list()
   if(length(pars_to_fix) > 0)
     fixed_pars = fix_pars(par_list = params, pars_to_exclude = pars_to_fix)
 
+  
   ## compile model
   #compile(file.path("src","debug_standalone_version.cpp"))
   #file.exists(file.path("src","debug_standalone_version.dll"))
