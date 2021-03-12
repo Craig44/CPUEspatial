@@ -113,6 +113,20 @@ where, \( a_s\) is the area of cell \(s\) and \(\boldsymbol{\tilde{X}_s^s}\) is 
 
 
 ## Configuration
+### R functions
+The main function for creating the TMB object is `configure_obj()` for information on parameters type `?configure_obj()`. This requires spatial data frame for observations and spatial data frame for a projected region of interest for each time-step. `configure_obj` function will return a list containing three objects names 
+\begin{enumerate}
+  \item `obj` This is TMB object created from `TMB::MakeADFun()` 
+  \item `tmb_pars` This is the inital parameter values when creating the TMB model
+  \item `tmb_data` This is the data configuration.
+\end{enumerate}
+The important
+
+To create spatial plots you can use the `get_projection()` to extract the spatial distribution for each time-step. This will append a column named `predicted_y` which you can use with ggplot to create pretty pictures.
+
+Goodness of fit, can be tricky for mixed effect models. The method that we have suggest is to go with predictive approach applied in the `DHARMa` R package. Users can use the `simulate_data()` function to generate predictive distributions. Which can easily be feed into the `DHARMa` package.
+
+
 
 ### Gaussian Field interpolation {-}
 CPUE analysis can involve large data-sets. When dealing with large data-sets geostatistical models can run into memory issues. i.e the following error 

@@ -87,21 +87,47 @@ simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = m
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
                              spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")
+## not quite as year is forced to be estimated (could swich it off, but fells like such an edge case)
+null_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
+                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type =  NULL, 
+                             spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                             spline_spatial_covariates = NULL, trace_level = "high")
 
 simple_model$obj$fn()
 simple_model$obj$gr()
 simple_model$obj$par
 opt = nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
+opt_null = nlminb(null_model$obj$par, null_model$obj$fn, null_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
 rep = simple_model$obj$report(simple_model$obj$env$last.par.best)
+null_rep = null_model$obj$report(null_model$obj$env$last.par.best)
+
 sd_rep = sdreport(simple_model$obj)
+
 
 glm_fit = glm(y_i ~ area + factor(year) + factor(fleet_ndx), data = sampData, family = Gamma(link = log))
 glm_fit_alt = glm(y_i ~  factor(year) + factor(fleet_ndx), offset = log(area), data = sampData, family = Gamma(link = log))
 
-## Compare the fits
+## Compare log likelihoods
 opt$objective 
 logLik(glm_fit)
 logLik(glm_fit_alt)
+
+## get deviance
+summary(glm_fit_alt)
+resid_dev = deviance_calc(y = data@data$y_i, mu = rep$mu, dist = "gamma")
+## not the conventional null model i.e. just an intercept, but a NULL model in a CPUE context that we
+## have an interecept and year effect.
+null_dev = deviance_calc(y = data@data$y_i, mu = null_rep$mu, dist = "gamma")
+
+summary(glm_fit_alt)$deviance
+resid_dev
+summary(glm_fit_alt)$null.deviance
+null_dev
+
+## pseudo R^2
+(1 - resid_dev / null_dev) * 100
+(1 - summary(glm_fit_alt)$deviance / summary(glm_fit_alt)$null.deviance) * 100
+
 ## get year indes
 con_ndx_glm = canonical.index(GLM = glm_fit, year = 1990:1999, base  = 1, year.name = "year")
 geo_index = con_ndx_glm$index
@@ -118,12 +144,6 @@ rep$phi
 
 # AIC
 2*opt$objective + 2*length(simple_model$obj$par)
-
-## influence plots
-myInfl = Influence$new(glm_fit)
-#myInfl$calc()
-attr(glm_fit, "family")
-attributes(glm_fit)
 
 ## compare fitted values
 

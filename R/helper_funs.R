@@ -59,6 +59,7 @@ logit_general = function(X, lb, ub) {
 #' @param random_seed integer seed
 #' @importFrom stats rnorm
 #' @importFrom Matrix solve Cholesky
+#' @export
 #' @return matrix of simulated parameter values with dimensions [n.sims x length(mu)]
 rmvnorm_prec <- function(mu, prec, n.sims, random_seed = trunc(runif(1, 1, 1e5))) {
   set.seed( random_seed )
@@ -119,6 +120,7 @@ check_tmb_convergence = function(obj, delta = 0.001) {
 #' @param vec_pars_to_adjust a vector string of parameter labels that we want to exclude certain elements.
 #' @param vec_elements_to_exclude a list with number of elements = length(vec_pars_to_adjust). each list element 
 #' contains a vector of elements that we want to exclude from estimation.
+#' @export
 #' @return a list of factors used in the MakeADFun function
 fix_pars = function(par_list, pars_to_exclude, vec_pars_to_adjust = NULL, vec_elements_to_exclude = NULL) {
   if (!any(pars_to_exclude %in% names(par_list))) {
@@ -159,6 +161,7 @@ fix_pars = function(par_list, pars_to_exclude, vec_pars_to_adjust = NULL, vec_el
 #' @param covariance_matrix symetric covariance matrix
 #' @param param_labels vector of param labels (optional)
 #' @param delta a cut off value for 'poorly' defined parameters.
+#' @export
 #' @return: data frame of eiegen values for the matrix and index of good and bad parameters based on delta
 #'
 eigen_decomp_covariance = function(covariance_matrix, param_labels = NULL, delta = .Machine$double.eps) {
@@ -186,4 +189,75 @@ eigen_decomp_covariance = function(covariance_matrix, param_labels = NULL, delta
     df = data.frame("Param"=param_labels, "eigenvalues", Eig$values ,"Param_check"=ifelse(RowMax>0.1, "Bad","OK"))
   }
   return(df)
+}
+
+#' cumulant_fun
+#' @details This is the cumulative function for the exponential families table 5.1 of GLM with examples in R DUnn 2018
+#' @param dist character values options availble {gaussian, gamma,binomial, neg_binomial, inverse_gaussian, poisson}
+#' @param theta canonical form of the distirbution
+#' @keywords internal
+#' @return returns the evaluation of the cumulative function given a theta
+cumulant_fun = function(theta, dist) {
+  result = NULL
+  if(dist == "gaussian") {
+    result = theta^2 /2
+  } else if (dist == "gamma") {
+    result = -log(-theta)
+  } else if (dist == "binomial") {
+    result = exp(theta) / (1 + exp(theta))
+  } else if (dist == "neg_binomial") {
+    result = - log(1 - exp(theta))
+  } else if (dist == "poisson") {
+    result = exp(theta)
+  } else if (dist == "inverse_gaussian") {
+    result = -sqrt(-2*theta)
+  } else {
+    stop("unknown distribution")
+  }
+  return(result)
+}
+#' canonical_fun
+#' @details returns the canonical form (often denoted as theta in the literature) given mu
+#' @param mu fitted values from the model
+#' @param dist character values options availble {gaussian, gamma,binomial, neg_binomial, inverse_gaussian, poisson}
+#' @param k the k parameter needed for the negative binomial evaluation
+#' @keywords internal
+#' @return canonical given fitted value
+canonical_fun = function(mu, dist, k = NULL) {
+  theta = NULL
+  if(dist == "gaussian") {
+    theta = mu
+  } else if (dist == "gamma") {
+    theta = - 1 / mu
+  } else if (dist == "binomial") {
+    theta = log(mu / (1 - mu))
+  } else if (dist == "neg_binomial") {
+    theta = log(mu / (mu + k))
+  } else if (dist == "poisson") {
+    theta = log(mu)
+  } else if (dist == "inverse_gaussian") {
+    theta = - 1 / (2*mu^2)
+  } else {
+    stop("unknown distribution")
+  }
+  return(theta)
+}
+
+#' deviance_calc
+#' @details returns the residual deviance based on the exponential family. That is 2 time fitted compared with the saturated model
+#' @param y response variable values
+#' @param mu fitted values from the model
+#' @param dist character values options availble {gaussian, gamma,binomial, neg_binomial, inverse_gaussian, poisson}
+#' @param k the k parameter needed for the negative binomial evaluation
+#' @export
+#' @return residual deviance
+deviance_calc = function(y, mu, dist, k = NULL) {
+  ## saturated t(y,y)
+  theta_s = canonical_fun(y, dist = dist, k = k)
+  ## fitted t(y,mu)
+  theta_fit = canonical_fun(mu, dist = dist, k = k)
+  
+  result = sum(2 * ((y * theta_s - cumulant_fun(theta_s, dist))
+                    - (y * theta_fit - cumulant_fun(theta_fit, dist))))
+  return(result)
 }

@@ -9,6 +9,7 @@ library(INLA)
 library(RandomFields)
 library(RANN)
 library(ggplot2)
+library(gridExtra)
 library(mgcv) 
 library(spatstat)
 library(DHARMa)
@@ -143,7 +144,9 @@ hist(sampData$y_i)
 summary(sampData$y_i)
 
 full_proj_df$y_i = 1
-full_proj_df$area = 1 ## equal area
+unique(diff(proj_df$x))
+unique(diff(proj_df$y))
+full_proj_df$area = 2.04 * 2.04 ## equal area
 
 data = sampData
 coordinates(data) <- ~ x + y
@@ -196,7 +199,7 @@ start_time = Sys.time()
 opt_omega_pref_din = nlminb(spatial_model_w_omega_w_pref_din$obj$par, spatial_model_w_omega_w_pref_din$obj$fn, spatial_model_w_omega_w_pref_din$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
 opt_omega_pref_din$opt_time = Sys.time() - start_time
 start_time = Sys.time()
-opt_omega_NN_pref_din = nlminb(spatial_model_w_omega_NN_w_pref_din$obj$par, spatial_model_w_omega_w_pref_din$obj$fn, spatial_model_w_omega_NN_w_pref_din$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
+opt_omega_NN_pref_din = nlminb(spatial_model_w_omega_NN_w_pref_din$obj$par, spatial_model_w_omega_NN_w_pref_din$obj$fn, spatial_model_w_omega_NN_w_pref_din$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
 opt_omega_NN_pref_din$opt_time = Sys.time() - start_time
 start_time = Sys.time()
 opt_omega_pref_lgcp = nlminb(spatial_model_w_omega_w_pref_lgcp$obj$par, spatial_model_w_omega_w_pref_lgcp$obj$fn, spatial_model_w_omega_w_pref_lgcp$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
@@ -210,10 +213,10 @@ opt_omega_NN_pref_din$opt_time
 opt_omega_pref_lgcp$opt_time 
 opt_omega_NN_pref_lgcp$opt_time
 ## estimate preference parameter
-rep_opt_omega_pref_din = spatial_model_w_omega_w_pref_din$obj$report()
-rep_opt_omega_NN_pref_din = spatial_model_w_omega_NN_w_pref_din$obj$report()
-rep_opt_omega_pref_lgcp = spatial_model_w_omega_w_pref_lgcp$obj$report()
-rep_opt_omega_NN_pref_lgcp = spatial_model_w_omega_NN_w_pref_lgcp$obj$report()
+rep_opt_omega_pref_din = spatial_model_w_omega_w_pref_din$obj$report(spatial_model_w_omega_w_pref_din$obj$env$last.par.best)
+rep_opt_omega_NN_pref_din = spatial_model_w_omega_NN_w_pref_din$obj$report(spatial_model_w_omega_NN_w_pref_din$obj$env$last.par.best)
+rep_opt_omega_pref_lgcp = spatial_model_w_omega_w_pref_lgcp$obj$report(spatial_model_w_omega_w_pref_lgcp$obj$env$last.par.best)
+rep_opt_omega_NN_pref_lgcp = spatial_model_w_omega_NN_w_pref_lgcp$obj$report(spatial_model_w_omega_NN_w_pref_lgcp$obj$env$last.par.best)
 
 rep_opt_omega_pref_din$pref_coef
 rep_opt_omega_NN_pref_din$pref_coef
@@ -241,8 +244,47 @@ rep_opt_omega_NN_pref_lgcp$Range_omega
 ## spatial plots
 proj_omega_din = get_projection(obj = spatial_model_w_omega_w_pref_din$obj, data = spatial_model_w_omega_w_pref_din$tmb_data, projection_df = full_proj_df, time_variable_label = "year")
 proj_omega_NN_din = get_projection(obj = spatial_model_w_omega_NN_w_pref_din$obj, data = spatial_model_w_omega_NN_w_pref_din$tmb_data, projection_df = full_proj_df, time_variable_label = "year")
-z_range = range(proj_omega_din$predicted_y)
-z_range_NN = range(proj_omega_NN_din$predicted_y)
+proj_omega_lgcp = get_projection(obj = spatial_model_w_omega_w_pref_lgcp$obj, data = spatial_model_w_omega_w_pref_lgcp$tmb_data, projection_df = full_proj_df, time_variable_label = "year")
+proj_omega_NN_lgcp = get_projection(obj = spatial_model_w_omega_NN_w_pref_lgcp$obj, data = spatial_model_w_omega_NN_w_pref_lgcp$tmb_data, projection_df = full_proj_df, time_variable_label = "year")
+z_range = range(c(proj_omega_din$predicted_y, proj_omega_NN_din$predicted_y, 
+                  proj_omega_lgcp$predicted_y,    proj_omega_NN_lgcp$predicted_y))
+                  
+## 
+years = unique(data@data$year)
+n_t = length(years)
+
+for(t in 1:n_t) {
+  print(years[t])
+  df = data.frame(subset(proj_omega_din, proj_omega_din$year == years[t]))
+  plt = ggplot(df, aes(x = x, y = y, fill = predicted_y)) +
+           geom_tile() +
+           ggtitle("Dinsdale") +
+           scale_fill_gradientn(colours=c("white","orange","red","dark red"), limits = z_range)
+  df = data.frame(subset(proj_omega_NN_din, proj_omega_NN_din$year == years[t]))
+  
+  plt1 = ggplot(df, aes(x = x, y = y, fill = predicted_y)) +
+    geom_tile() +
+    ggtitle("Dinsdale NN")       +
+    scale_fill_gradientn(colours=c("white","orange","red","dark red"), limits = z_range)
+  
+  df = data.frame(subset(proj_omega_lgcp, proj_omega_lgcp$year == years[t]))
+  plt2 = ggplot(df, aes(x = x, y = y, fill = predicted_y)) +
+    geom_tile() +
+    ggtitle("LGCP") +
+    scale_fill_gradientn(colours=c("white","orange","red","dark red"), limits = z_range)
+  
+  df = data.frame(subset(proj_omega_NN_lgcp, proj_omega_NN_lgcp$year == years[t]))
+  plt3 = ggplot(df, aes(x = x, y = y, fill = predicted_y)) +
+    geom_tile() +
+    ggtitle("LGCP NN")   +
+    scale_fill_gradientn(colours=c("white","orange","red","dark red"), limits = z_range)   
+  ##
+  joint_plt = grid.arrange(plt, plt1,plt2,plt3, ncol = 2)
+  ## if you want to save it
+  ## ggsave(filename = , plot = joint_plt...)
+  Sys.sleep(2)
+}
+
 
 ## goodness of fits
 rep_opt_omega_pref_din = spatial_model_w_omega_w_pref_din$obj$report()
