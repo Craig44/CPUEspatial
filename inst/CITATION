@@ -1,0 +1,19 @@
+citHeader("To cite excursions in publications use:")
+
+bibentry(bibtype = "Article",
+  title = "spataialsurvey: an R package spatial survey data using TMB",
+  author = c(person(given = "Craig A.",
+                    family = "Marsh")),
+             
+  year = "2020",
+  journal = "TBD",
+  volume = "",
+  pages = "",
+  doi = "",
+  publisher = "",
+  textVersion  =
+      paste0("Craig A. Marsh (2020), ",
+             "{spataialsurvey}: an {R} package spatial survey data using TMB ",
+             "Journal issue and page reference ",
+             "doi: ")
+)
