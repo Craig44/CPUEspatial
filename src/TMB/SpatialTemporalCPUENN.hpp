@@ -302,7 +302,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
         SIMULATE{y_i(i) = rpois(mu(i));}
         break;
       case binomial_family:
-        tmp_loglik = dbinom_robust(y_i(i), Type(1), mu(i), true);
+        tmp_loglik = dbinom(y_i(i), Type(1), mu(i), true);
         SIMULATE{y_i(i) = rbinom(Type(1), mu(i));}
         break;
       case gamma_family:
@@ -408,6 +408,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   //REPORT( spatial_proj );
   
   REPORT( pref_coef );
+  REPORT( lgcp_intercept );
   
   REPORT( phi );
   REPORT( mu );

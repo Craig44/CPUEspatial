@@ -1,5 +1,5 @@
 Package: CPUEspatial
-Title: What the Package Does (One Line, Title Case)
+Title: Geostatistical CPUE analysis for univariate response variables.
 Version: 0.0.1.0
 Authors@R: 
     person(given = "Craig",
@@ -7,10 +7,11 @@ Authors@R:
            role = c("aut", "cre"),
            email = "craig.marsh10@gmail.com",
            comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+Description: Geostatistical CPUE analysis, currently only univariate, plans to allow for hurdle models.
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
+Depends: R (>= 3.5.0)
 Imports: 
     TMB (>= 1.7.16),
     INLA,
@@ -18,7 +19,11 @@ Imports:
     RANN,
     mgcv,
     raster,
+    reshape2,
     Matrix (>= 1.2.17)
 LinkingTo: 
     TMB
 RoxygenNote: 7.1.1
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

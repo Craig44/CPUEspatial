@@ -310,7 +310,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
       case negative_binomial_family:
         s1 = log(mu(i));                       // log(mu)
         s2 = 2. * s1 - ln_phi;                 // log(var - mu)
-        tmp_loglik = dnbinom_robust(y_i(i), s1 , s2, true);
+        tmp_loglik = dbinom(y_i(i), s1 , s2, true);
         SIMULATE {
           s1 = mu(i);  
           s2 = mu(i) * (1.0 + phi);  
@@ -378,6 +378,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   REPORT( pref_numerator );
   REPORT( pref_denom );
+  REPORT( lgcp_intercept );
+  REPORT( pref_coef );
   
   REPORT( nll );
   REPORT( betas );
@@ -395,7 +397,6 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( spatial_covariate_i );
   REPORT( spline_spatial_i );
   REPORT( omega_proj );
-  REPORT( pref_coef );
   
   REPORT( phi );
   REPORT( mu );
