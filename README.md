@@ -18,6 +18,7 @@ we split out Habitat variables with catchability variables.
 - Merge nearest neighbour and triangulation spatial approachs currently in two seperate source files that share 90% the same code
 - Variable selection help - an issue I have found with these models are they can be slow to evalueate MLE estimates, so variable selection can be a tiresome approach if you try an stepwise approach, i.e. forward with some deviance acceptance criteria
 ## Installation
+System requirements include R version `> 3.5` so you will need a newish R version to install this R package. It also depend on in the R package INLA, which is not on CRAN. See [here](https://www.r-inla.org/download-install) for install instructions. Most other packages should be on CRAN.
 ```
 devtools::install_github("Craig44/CPUEspatial")
 ```
