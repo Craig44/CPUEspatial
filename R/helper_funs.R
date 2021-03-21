@@ -254,6 +254,10 @@ canonical_fun = function(mu, dist, k = NULL) {
 deviance_calc = function(y, mu, dist, k = NULL) {
   ## saturated t(y,y)
   theta_s = canonical_fun(y, dist = dist, k = k)
+  if(dist == "poisson") {
+    if(sum(y == 0) > 0)
+      warning("the deviance calculation for observations = 0 for poisson I don't think is handled or correct. sorry")
+  }
   ## fitted t(y,mu)
   theta_fit = canonical_fun(mu, dist = dist, k = k)
   

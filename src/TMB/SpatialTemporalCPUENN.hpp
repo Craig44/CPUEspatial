@@ -283,9 +283,14 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   
   // Apply link function
   vector<Type> mu(eta.size());
-  for (i = 0; i < mu.size(); i++)
-    mu(i) = area_i(i) * inverse_linkfun(eta(i), link);
-  
+  if(family == 1) {
+    // Not going to area weight for binomial, doesn't make sense for proportion expected value
+    for (i = 0; i < mu.size(); i++)
+      mu(i) = inverse_linkfun(eta(i), link);
+  } else {
+    for (i = 0; i < mu.size(); i++)
+      mu(i) = area_i(i) * inverse_linkfun(eta(i), link);
+  }
   // Contribution Y | S, H
   // Observation likelihood
   Type s1, s2;
@@ -302,7 +307,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
         SIMULATE{y_i(i) = rpois(mu(i));}
         break;
       case binomial_family:
-        tmp_loglik = dbinom(y_i(i), Type(1), mu(i), true);
+        tmp_loglik = dbinom_robust(y_i(i), Type(1), eta(i), true); // Assumes logit link function Not probit
         SIMULATE{y_i(i) = rbinom(Type(1), mu(i));}
         break;
       case gamma_family:

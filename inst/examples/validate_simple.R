@@ -76,13 +76,37 @@ sampData$y_i = rgamma(n = nrow(sampData), shape = shape, scale = (sampData$area 
 
 full_proj_df$y_i = 1
 full_proj_df$y_i = 1
-full_proj_df$area = 1
+full_proj_df$area = 2.0408 * 2.0408 
 
 data = sampData
 coordinates(data) <- ~ x + y
 coordinates(full_proj_df) <- ~ x + y
 
 ## check they all configure correclty
+observed_df = data
+projection_df = full_proj_df
+mesh = mesh
+family = 2
+link = 0
+include_omega = F
+include_epsilon = F
+response_variable_label = "y_i"
+time_variable_label = "year"
+catchability_covariates = "fleet_ndx"
+catchability_covariate_type = "factor"
+spatial_covariates = NULL
+spatial_covariate_type = NULL
+spline_catchability_covariates = NULL
+spline_spatial_covariates = NULL
+trace_level = "high"
+apply_preferential_sampling = F
+preference_model_type = 0
+linear_basis = 1
+projection_raster_layer = NULL
+
+#save(data, full_proj_df, year_coef, fleet_coef, mesh, file = "non_spatial_glm.RData")
+
+
 simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
                              spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
@@ -92,6 +116,7 @@ null_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mes
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type =  NULL, 
                              spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")
+simple_model$obj$par
 
 simple_model$obj$fn()
 simple_model$obj$gr()
@@ -152,7 +177,37 @@ rep$phi
 
 
 
+#############################
+## Normal distribution
+############################
+std_dev = 0.0001 ### for gamma response variable
+## simulate data 
+data@data$y_i = rnorm(n = nrow(data), mean = data$area * data$eta, sd = std_dev)
+data@data$y_per_area =  data@data$y_i /  data@data$area
 
+## build model
+simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 0, link = 4, include_omega = F, include_epsilon = F, 
+                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
+                             spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                             spline_spatial_covariates = NULL, trace_level = "none")
+## estimate model
+opt = nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
+#opt$convergence
+## get derived quantities
+rep_CPUE_spatial = simple_model$obj$report(simple_model$obj$env$last.par.best)
+simple_glm = glm(y_per_area ~  factor(year) + factor(fleet_ndx), data = data, family = gaussian(link = "identity"))
 
+## get year indes
+con_ndx_glm = canonical.index(GLM = simple_glm, year = 1990:1999, base  = 1, year.name = "year")
+geo_index = con_ndx_glm$index
+
+plot(geo_index$year, geo_index$index, type = "l", lwd = 3, xlab = "Year", ylab = "Relative Index", ylim = c(0, 4))
+lines(geo_index$year, rep_CPUE_spatial$relative_index / gm_mean(rep_CPUE_spatial$relative_index), lwd = 3, lty = 2, col = "red")
+arrows(x0 = geo_index$year, x1 = geo_index$year, y0 = geo_index$lower.CI, 
+       y1 = geo_index$upper.CI, lwd = 3, angle = 90, length = 0.05, code = 3)
+legend('topright', legend = c("CPUE spatial","GLM"), col = c("red","black"), lwd = 3)
+## manually calculate the dispersion of Gamma log GLM
+summary(simple_glm)$dispersion
+rep_CPUE_spatial$phi
 
 

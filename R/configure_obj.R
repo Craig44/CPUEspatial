@@ -45,7 +45,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     stop(paste0("projection_df needs to be of class SpatialPointsDataFrame, see the example for more information, can be converted by using coordinates(projection_df) <- ~ x + y"))
   if(class(mesh) != "inla.mesh")
     stop(paste0("mesh needs to be of class inla.mesh, see the example for more information"))
-  if(!family %in% c(0:3))
+  if(!family %in% c(0:4))
     stop(paste0("family needs to be a value from 0 to 3, for a valid distribution"))
   if(!link %in% c(0:4))
     stop(paste0("link needs to be a value from 0 to 4, for a valid link function"))
@@ -60,7 +60,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     set_up_dummy_proj = FALSE
   }
     
-  
+  if(family == 1 & link != 1)
+    stop("Currently binomial family is only parameterised for link = logit.")
   # check projections are the same.
   #if(is.na(attr(crs(projection_df), "projargs") != attr(crs(data), "projargs")) attr(crs(projection_df), "projargs") != attr(crs(data), "projargs"))
   #  stop(paste0("projection_df and data need to have the same crs projection system, please check raster::crs() for both these objects"))
@@ -174,12 +175,11 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     }
   } else {
     ## create a dummy variable
-    data@data$dummy_var = rnorm(nrow(data@data))
     spline_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ s(area, bs = 'cs'), data = data@data, fit = F)"), e1)
     if(trace_level == "high")
       print(paste0("length spline = ", length( spline_$smooth)))
     S_null <- spline_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(data@data[,"dummy_var"]),max(data@data[,"dummy_var"]),by = diff(range(data@data[,"dummy_var"])) / 50)
+    for_plotting <- seq(min(data@data[,"area"]),max(data@data[,"area"]),by = diff(range(data@data[,"area"])) / 50)
     forReport <- mgcv::PredictMat(spline_$smooth[[1]], data = data.frame(area = for_plotting))
     S_catchability_list[[1]] <- S_null
     S_catchability_reporting_list[[1]] <- forReport
@@ -204,13 +204,12 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     }
   } else {
     ## create a dummy variable
-    data@data$dummy_var = rnorm(nrow(data@data))
-    spline_spatial_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ s(dummy_var, bs = 'cs'), data = data@data, fit = F)"), e1)
+    spline_spatial_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ s(area, bs = 'cs'), data = data@data, fit = F)"), e1)
     if(trace_level == "high")
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     
     S_null <- spline_spatial_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(data@data[,"dummy_var"]),max(data@data[,"dummy_var"]),by = diff(range(data@data[,"dummy_var"])) / 50)
+    for_plotting <- seq(min(data@data[,"area"]),max(data@data[,"area"]),by = diff(range(data@data[,"area"])) / 50)
     forReport <- mgcv::PredictMat(spline_spatial_$smooth[[1]], data = data.frame(area = for_plotting))
     S_spatial_list[[1]] <- S_null
     S_spatial_reporting_list[[1]] <- forReport

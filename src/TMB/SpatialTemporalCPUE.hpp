@@ -181,7 +181,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   vector<Type> omega_proj(n_p); 
   vector<Type> epsilon_proj(n_p);
   vector<Type> spatial_proj(n_p);  
-
+  vector<Type> mu(n_i);
+  
   SparseMatrix<Type> S_i; 
   pref_numerator.setZero();
   pref_denom.setZero();
@@ -278,10 +279,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     eta += spline_model_matrix * gammas;
   
   // Apply link function
-  vector<Type> mu(eta.size());
-  for (i = 0; i < mu.size(); i++)
-    mu(i) = area_i(i) * inverse_linkfun(eta(i), link);
-  
+  if(family == 1) {
+    // Not going to area weight for binomial, doesn't make sense for proportion expected value
+    for (i = 0; i < mu.size(); i++)
+      mu(i) = inverse_linkfun(eta(i), link);
+  } else {
+    for (i = 0; i < mu.size(); i++)
+      mu(i) = area_i(i) * inverse_linkfun(eta(i), link);
+  }
   // Contribution Y | S, H
   // Observation likelihood
   Type s1, s2;
@@ -298,7 +303,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
         SIMULATE{y_i(i) = rpois(mu(i));}
         break;
       case binomial_family:
-        tmp_loglik = dbinom_robust(y_i(i), Type(1), mu(i), true);
+        tmp_loglik = dbinom_robust(y_i(i), Type(1), eta(i), true); // !!Note - Assumes logit link function Not probit
         SIMULATE{y_i(i) = rbinom(Type(1), mu(i));}
         break;
       case gamma_family:
@@ -310,7 +315,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
       case negative_binomial_family:
         s1 = log(mu(i));                       // log(mu)
         s2 = 2. * s1 - ln_phi;                 // log(var - mu)
-        tmp_loglik = dbinom(y_i(i), s1 , s2, true);
+        tmp_loglik = dnbinom_robust(y_i(i), s1 , s2, true);
         SIMULATE {
           s1 = mu(i);  
           s2 = mu(i) * (1.0 + phi);  

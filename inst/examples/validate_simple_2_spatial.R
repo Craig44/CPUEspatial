@@ -136,6 +136,9 @@ simple_spatial_model = configure_obj(data = data, projection_df = full_proj_df, 
                                      spatial_covariates = c("region", "depth"), spatial_covariate_type = c("factor", "numeric"), spline_catchability_covariates = NULL,
                                      spline_spatial_covariates = NULL, trace_level = "high")
 
+simple_spatial_model$tmb_pars
+simple_spatial_model$obj$par
+
 simple_spatial_model$obj$fn()
 simple_spatial_model$obj$gr()
 names(simple_spatial_model$obj$par)[simple_spatial_model$obj$gr() == 0]
