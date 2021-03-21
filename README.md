@@ -8,14 +8,16 @@ Currently only available for positive observation only, but allows for linear te
 As well as time-invariant spatial GMRF (omega) and a time-varying spatial GMRF (epsilon). The structure of the systematic component is similar to that of VAST where
 we split out Habitat variables with catchability variables.
 
-## Features I want to add
+## Features to test and validate
 - Simulation (self test)
 - Influence plots (Reference Nokome's plot)
 - Precense/Absence 
 - Comprehensive documentation....
 - Example case
 - Diagnostics
+- Merge nearest neighbour and triangulation spatial approachs currently in two seperate source files that share 90% the same code
 - Variable selection help - an issue I have found with these models are they can be slow to evalueate MLE estimates, so variable selection can be a tiresome approach if you try an stepwise approach, i.e. forward with some deviance acceptance criteria
-
-## TODO 
-[ ] add covariate step function, which will step through variables to select the best configurations.
+## Installation
+```
+devtools::install_github("Craig44/CPUEspatial")
+```
