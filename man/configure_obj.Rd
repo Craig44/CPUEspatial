@@ -15,9 +15,7 @@ configure_obj(
   response_variable_label,
   time_variable_label,
   catchability_covariates = NULL,
-  catchability_covariate_type = NULL,
   spatial_covariates = NULL,
-  spatial_covariate_type = NULL,
   spline_catchability_covariates = NULL,
   spline_spatial_covariates = NULL,
   linear_basis = 0,
@@ -46,13 +44,9 @@ configure_obj(
 
 \item{time_variable_label}{character relating to a column names needs to be an integer variable}
 
-\item{catchability_covariates}{string vector relating to a column names needs to be an integer variable}
+\item{catchability_covariates}{string vector of column labels corresponding for catchability realted covariates, if type not numeric it is treated as categorical}
 
-\item{catchability_covariate_type}{string vector indicating if the factor, numeric}
-
-\item{spatial_covariates}{vector of strings relating to a column names needs to be an integer variable}
-
-\item{spatial_covariate_type}{string vector indicating if the factor, numeric}
+\item{spatial_covariates}{string vector of column labels corresponding for spatial habitat realted covariates, if type not numeric it is treated as categorical}
 
 \item{spline_catchability_covariates}{string vector}
 

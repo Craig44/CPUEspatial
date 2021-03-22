@@ -64,6 +64,8 @@ for(i in 1:n_years) {
 sampData$fleet_ndx = fleet_ndx 
 head(sampData)
 
+sampData$fleet_ndx = factor(sampData$fleet_ndx)
+
 mesh = inla.mesh.2d(max.edge = max.edge, n =10, cutoff = cutoff, loc.domain = SpatialPoints( data.frame(x = c(0,0,grid_dim["x"],grid_dim["x"]), y= c(0,grid_dim["y"],grid_dim["y"],0))))
 A = inla.spde.make.A(mesh, loc = cbind(sampData$x, sampData$y))
 Proj <- inla.mesh.projector(mesh, loc = cbind(proj_df$x, proj_df$y))
@@ -108,13 +110,13 @@ projection_raster_layer = NULL
 
 
 simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
-                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                             spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                             spatial_covariates = NULL, spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")
 ## not quite as year is forced to be estimated (could swich it off, but fells like such an edge case)
 null_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
-                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type =  NULL, 
-                             spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL,
+                             spatial_covariates = NULL, spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")
 simple_model$obj$par
 

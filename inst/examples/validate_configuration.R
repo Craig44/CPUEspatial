@@ -26,8 +26,8 @@ n = 1000 # per year
 grid_dim = c("x"=100, "y"=100)
 # mesh configuration values
 # these are relative to the domain units.
-max.edge = c(4, 10)
-cutoff = c(6)
+max.edge = c(10, 20)
+cutoff = c(16)
 
 # marginal variance of the spatial field
 # marginal variance of the spatial-temporal field 
@@ -178,6 +178,9 @@ sampData$area = rlnorm(n, log(0.01 * 0.02), 0.4)
 sampData$eta =  intercept + sampData$spatial_component + normalised_year_coef[sampData$year] + ifelse(sampData$fleet_ndx == 1, 0, fleet_coef[2] - fleet_coef[1])
 sampData$y_i = rgamma(n = nrow(sampData), shape = shape, scale = (sampData$area * exp(sampData$eta)) / shape)
 
+sampData$fleet_ndx = factor(sampData$fleet_ndx)
+sampData$habitat = factor(sampData$habitat)
+projection_df$habitat = factor(projection_df$habitat)
 data = sampData
 coordinates(data) <- ~ x + y
 coordinates(projection_df) <- ~ x + y
@@ -206,18 +209,20 @@ detach("package:CPUEspatial", unload=TRUE)
 library(CPUEspatial)
 
 
+#save(data, projection_df, mesh, file = "config.RData")
+
 ## check they all configure correclty
 simple_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
-                      response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, catchability_covariate_type = NULL, 
-                      spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                      response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, 
+                      spatial_covariates = NULL, spline_catchability_covariates = NULL,
                       spline_spatial_covariates = NULL, trace_level = "high")
 
 
 #obj_simple <- MakeADFun(simple_model$tmb_data, simple_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
 
 single_catch_model = configure_obj(data = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = T, include_epsilon = T, 
-                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                             spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                             spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")
 #obj_single_catch <- MakeADFun(single_catch_model$tmb_data, single_catch_model$tmb_pars, random = c("epsilon_input","omega_input"), DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent=T)
 

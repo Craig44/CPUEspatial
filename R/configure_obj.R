@@ -9,10 +9,8 @@
 #' @param include_omega boolean time-varying spatial GF
 #' @param response_variable_label character relating to a column name in data
 #' @param time_variable_label character relating to a column names needs to be an integer variable 
-#' @param catchability_covariates string vector relating to a column names needs to be an integer variable 
-#' @param catchability_covariate_type string vector indicating if the factor, numeric
-#' @param spatial_covariates vector of strings relating to a column names needs to be an integer variable 
-#' @param spatial_covariate_type string vector indicating if the factor, numeric
+#' @param catchability_covariates string vector of column labels corresponding for catchability realted covariates, if type not numeric it is treated as categorical
+#' @param spatial_covariates string vector of column labels corresponding for spatial habitat realted covariates, if type not numeric it is treated as categorical
 #' @param spline_catchability_covariates string vector 
 #' @param spline_spatial_covariates vector of strings indicating column name
 #' @param mesh an inla.mesh object that has been created before this function is applied
@@ -34,7 +32,7 @@
 #' @importFrom raster raster rasterize crs
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
-configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, catchability_covariate_type = NULL, spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
                          spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, projection_raster_layer = NULL, trace_level = "none") {
   e1 <- parent.frame()
   if(!trace_level %in% c("none", "low", "medium","high"))
@@ -49,10 +47,6 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     stop(paste0("family needs to be a value from 0 to 3, for a valid distribution"))
   if(!link %in% c(0:4))
     stop(paste0("link needs to be a value from 0 to 4, for a valid link function"))
-  if(length(catchability_covariates) != length(catchability_covariate_type))
-    stop(paste0("catchability_covariates needs to be length catchability_covariate_type"))
-  if(length(spatial_covariates) != length(spatial_covariate_type))
-    stop(paste0("spatial_covariates needs to be length spatial_covariate_type"))
   set_up_dummy_proj = TRUE
   if(apply_preferential_sampling & preference_model_type == 1) {
     if(is.null(projection_raster_layer))
@@ -66,6 +60,23 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   #if(is.na(attr(crs(projection_df), "projargs") != attr(crs(data), "projargs")) attr(crs(projection_df), "projargs") != attr(crs(data), "projargs"))
   #  stop(paste0("projection_df and data need to have the same crs projection system, please check raster::crs() for both these objects"))
 
+  catchability_covariate_type = NULL
+  if(length(catchability_covariates) > 0) {
+    for(i in 1:length(catchability_covariates)) {
+      this_type = class(data@data[, catchability_covariates[i]])
+      catchability_covariate_type = c(catchability_covariate_type, this_type)
+    }
+  }
+  
+  spatial_covariate_type = NULL
+  if(length(spatial_covariates) > 0) {
+    for(i in 1:length(spatial_covariates)) {
+      this_type = class(data@data[, spatial_covariates[i]])
+      if(this_type == "integer")
+        stop(paste0("currently the variable ", spatial_covariates[i], " is of type integer. Change this to either a factor or numeric so this function can correctly configure the model"))
+      spatial_covariate_type = c(spatial_covariate_type, this_type)
+    }
+  }
   vars_needed = c(response_variable_label, time_variable_label, catchability_covariates, spatial_covariates, spline_spatial_covariates, "area")
   proj_vars_needed = c(response_variable_label, time_variable_label, spatial_covariates, "area")
   # get response variable
@@ -112,7 +123,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   
   model_matrix = matrix(1, nrow = n, ncol = 1);
   if(length(catchability_covariates) != 0) {
-    ff = paste0(response_variable_label," ~ ",paste(ifelse(catchability_covariate_type == "factor", paste0("factor(",catchability_covariates,")"), catchability_covariates), collapse = " + "))
+    ff = paste0(response_variable_label," ~ ",paste(catchability_covariates, collapse = " + "))
     m <- model.frame(formula(ff), data@data)
     model_matrix <- model.matrix(formula(ff), m)
   }
@@ -125,7 +136,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   ## needs to be 2 columns as we estimate n-1 coeffectients so we need at least 2 cols so we have 1 transformed parameter
   ## will be ignored as, the transformed parameters will be fixed at 0
   if(length(spatial_covariates) != 0) {
-    data_spatial_model_matrix = evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = data@data)"), e1)
+    data_spatial_model_matrix = evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
     p_s = max(attributes(data_spatial_model_matrix)$assign) # should be the same length as spatial covariate
     if(attributes(data_spatial_model_matrix)$dim[2] == 1) {
       spatial_constrained_coeff_ndx = matrix(-99, nrow = p_s, ncol = 1)
@@ -189,7 +200,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     print(paste0("Passed catchability spline section"))
   
   if(length(spline_spatial_covariates) > 0) {
-    spline_spatial_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"))
+    spline_spatial_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"), e1)
     if(trace_level == "high") {
       print(paste0("formula = mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
@@ -277,8 +288,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
 
     
     if(length(spatial_covariates) > 0) {
-      data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + "),",  data = data@data)"), e1)
-      ff <- evalit(paste0(response_variable_label," ~ 0 + ", paste(ifelse(spatial_covariate_type == "factor", paste0("factor(",spatial_covariates,")"), spatial_covariates), collapse = " + ")), e1)
+      data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
+      ff <- evalit(paste0(response_variable_label," ~ 0 + ", paste(spatial_covariates, collapse = " + ")), e1)
       m <- model.frame(ff, proj_df_subset)
       proj_spatial_model_matrix <- model.matrix(ff, m)
       if(ncol(proj_spatial_model_matrix) != ncol(data_spatial_model_matrix))

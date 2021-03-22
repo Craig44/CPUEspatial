@@ -413,6 +413,10 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( Range_epsilon );
   ADREPORT( MargSD_omega );
   ADREPORT( MargSD_epsilon );
+  ADREPORT( spatial_betas );
+  ADREPORT( betas );
+  ADREPORT( time_betas );
+  
   //ADREPORT( relative_index );
   //ADREPORT( standardised_index );
   

@@ -8,17 +8,18 @@
 test_that("gamma_glm", {
   load(system.file("testdata", "non_spatial_glm.RData",package="CPUEspatial"))
   shape = 50 ### for gamma response variable
+  
   ## simulate data 
   data@data$y_i = rgamma(n = nrow(data), shape = shape, scale = (data$area * exp(data$eta)) / shape)
   
   ## build model
   simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                               spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   simple_model_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                               spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 1)
   
   ## estimate model
@@ -47,12 +48,12 @@ test_that("poisson_glm", {
   
   ## build model
   simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 3, link = 0, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                               spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   simple_model_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 3, link = 0, include_omega = F, include_epsilon = F, 
-                                  response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                                  spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                                  response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                                  spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                   spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 1)
   
   ## estimate model
@@ -82,17 +83,17 @@ test_that("normal_glm", {
   glm_version_data@data$area = 1
   ## build model
   simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 0, link = 4, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                               spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   simple_model_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 0, link = 4, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                               spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 1)
   
   simple_glm_model = configure_obj(data = glm_version_data, projection_df = full_proj_df, mesh = mesh, family = 0, link = 4, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_per_area", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_per_area", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                               spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   ## estimate model
   opt = nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
@@ -132,12 +133,12 @@ test_that("lognormal_glm", {
   std_dev = 0.15
   data@data$y_i = rlnorm(n = nrow(data), meanlog = log(data$area * exp(data$eta)), std_dev)
   simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 0, link = 0, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                               spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   simple_model_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 0, link = 0, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",  
+                               spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 1)
   ## estimate model
   opt = nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
@@ -160,12 +161,12 @@ test_that("binomial_glm", {
   data@data$y_i = rbinom(n = nrow(data), size = 1, prob = plogis(data$eta))
   #table(data@data$y_i) 
   simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 1, link = 1, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                               spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   simple_model_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 1, link = 1, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                               spatial_covariates = NULL, spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 1)
   ## estimate model
   opt = nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
@@ -197,12 +198,12 @@ test_that("negative_binomial_glm", {
   
   #table(data@data$y_i) 
   simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 4, link = 0, include_omega = F, include_epsilon = F, 
-                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                               spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                               response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                               spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                spline_spatial_covariates = NULL, trace_level = "none")
   simple_model_NN = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 4, link = 0, include_omega = F, include_epsilon = F, 
-                                  response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                                  spatial_covariates = NULL, spatial_covariate_type = NULL, spline_catchability_covariates = NULL,
+                                  response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                                  spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                   spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 1)
   ## estimate model
   opt = suppressWarnings(nlminb(simple_model$obj$par, simple_model$obj$fn, simple_model$obj$gr, control = list(eval.max = 10000, iter.max = 10000)))

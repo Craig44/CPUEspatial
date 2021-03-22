@@ -2,7 +2,6 @@
 #' Real example
 #'
 
-#source("influ.R")
 library(CPUEspatial)
 library(kableExtra)
 library(nzPlot)
@@ -17,6 +16,8 @@ library(RColorBrewer)
 library(raster)
 library(INLA)
 source(file.path("inst", "examples","read_NZ_polys.R"))
+source(file.path("inst", "examples", "influ.R"))
+
 head(cpue_df)
 cpue_df$area = cpue_df$fishing_distance * cpue_df$effort_width/1000 # km^2
 cpue_df$log_catch = log(cpue_df$BAR_catch)
@@ -286,10 +287,148 @@ apply_preferential_sampling = T
 preference_model_type = 1
 projection_raster_layer = proj_raster_with_active_cells
 
-simple_glm = configure_obj(data = data2use2_utm, projection_df = full_proj_df, mesh = mesh_utm, family = 0, link = 4, include_omega = F, include_epsilon = F, 
+non_spatial = configure_obj(data = data2use2_utm, projection_df = full_proj_df, mesh = mesh_utm, family = 0, link = 4, include_omega = F, include_epsilon = F, 
                            response_variable_label = "log_catch", time_variable_label = "fish_year", catchability_covariates = c("vessel_key","target_species","fish_month"), catchability_covariate_type = c("factor", "factor","factor"), 
                            spatial_covariates = c("start_stats_area_code"), spatial_covariate_type = c("factor"), spline_catchability_covariates = NULL,
                            spline_spatial_covariates = NULL, trace_level = "high")
 
-simple_glm$obj$fn()
+non_spatial$obj$fn()
+
+sd_rep = sdreport(non_spatial$obj)
+opt = nlminb(non_spatial$obj$par, non_spatial$obj$fn, non_spatial$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
+opt$convergence
+
+non_spatial_rep = non_spatial$obj$report(non_spatial$obj$env$last.par.best)
+## glm approach
+glm_data = data@data
+glm_data$fish_year = as.character(glm_data$fish_year)
+glm_data$fish_year = as.factor(glm_data$fish_year)
+glm_data$fish_month = as.factor(glm_data$fish_month)
+glm_data$fish_year = as.factor(glm_data$fish_year)
+#glm_data$vessel_key
+log_positive = glm(log(BAR_catch) ~ fish_year + vessel_key + target_species + start_stats_area_code +fish_month, offset = area, data = glm_data)
+
+##################################################
+## Influence Plots calculations
+##################################################
+myInfl = Influence$new(model = log_positive)
+myInfl$calc()
+myInfl$summary
+
+tab = kable(myInfl$summary,
+            row.names = FALSE,
+            caption = "Influence metrics.",
+            format = "latex", escape=F, digits = 2, booktabs = T)
+## if you want the float [H] so table stays in a latex document use latex_options = "HOLD_position"
+tab = tab %>%
+  kable_styling(position = "center", latex_options = c("HOLD_position", "scale_down"))
+
+print(tab) # copy this into the latex document
+#save to file called "car_table.tex"
+#cat(tab, file = file.path("..","writing", "influence.tex"))
+
+#png(filename = file.path(DIR$fig, "stan_vs_unstan.png"), res = 150, height = 7, width = 10, units = "in")
+myInfl$stanPlot()
+#dev.off()
+
+myInfl$cdiPlot('fish_month')
+
+
+labs = names(sd_rep$value)
+
+## get levels
+## if numeric cut() into break factors
+## Reorder levels according to coefficients if necessary
+## distrs = aggregate(.$preds[,1],list(levels,.$preds[,.$focus]),length)
+## 
+## 
+. = myInfl
+term = "fish_month"
+variable=NULL
+
+
+#Define levels of term on which coefficient and distribution plots will be based
+#This is done by search for each column name in the data as a whole word in the
+#each term. This allows for matching of terms like 'poly(log(var),3)' with 'var'
+if(is.null(variable)){
+  for(name in names(.$preds)){
+    match = grep(paste('([^[:alnum:]_])+',name,'([^[:alnum:]_])+',sep=''),paste('(',term,')')) # ([^\\w])+ Means ignore any 'word' character (alphanumerics plus underscore)
+    if(length(match)>0){
+      variable = name
+      break
+    }
+  }
+}
+if(is.null(variable)) stop('Unable to find a matching variable for term "',term,'". Please specify in the argument "variable".')
+levels = .$preds[,variable]
+
+#Numeric terms are cut into factors
+if(is.numeric(levels)){
+  breaks = pretty(levels,30)
+  step = breaks[2]-breaks[1]
+  labels = breaks+step/2
+  breaks = c(breaks,breaks[length(breaks)]+step)
+  levels = cut(levels,breaks,labels=labels,include.lowest=T)
+}
+#Reorder levels according to coefficients if necessary
+if(.$orders[[term]]=='coef'){
+  coeffs = aggregate(.$preds[,paste('fit',term,sep='.')],list(levels),mean)
+  names(coeffs) = c('term','coeff')
+  coeffs = coeffs[order(coeffs$coeff),]
+  levels = factor(levels,levels=coeffs$term,ordered=T)
+}
+
+
+catchability_coef_labs = colnames(non_spatial$tmb_data$model_matrix)
+catch_int = rep$betas[1]
+mod_ndx = grepl(catchability_coef_labs, pattern = term)
+temp_coeffs = non_spatial_rep$betas[mod_ndx]
+names(temp_coeffs) = catchability_coef_labs[mod_ndx]
+raw_coeffs = coef(log_positive)
+glm_raw_coeffs = grepl(names(raw_coeffs), pattern = term)
+raw_coeffs[glm_raw_coeffs]
+
+this_term_glm = c(raw_coeffs[1], raw_coeffs[1] + raw_coeffs[glm_raw_coeffs])
+this_term_cpue = c(catch_int, catch_int + temp_coeffs)
+
+this_term_glm - mean(this_term_glm)
+this_term_cpue - mean(this_term_cpue)
+
+plot(this_term_glm)
+points(this_term_cpue, col = "red")
+
+
+plot()
+#Coefficients
+coeffs = aggregate(.$preds[,paste(c('fit','se.fit'),term,sep='.')],list(levels),mean)
+names(coeffs) = c('term','coeff','se')
+coeffs = within(coeffs,{
+  lower = coeff-se
+  upper = coeff+se
+})
+
+par(mar=c(0,5,3,0),las=1)
+with(coeffs,{
+  xs = 1:max(as.integer(term))
+  ylim = c(min(exp(lower)),max(exp(upper)))
+  if(ylim[1]<0.5*min(exp(coeff))) ylim[1] = 0.5*min(exp(coeff))
+  if(ylim[2]>2*max(exp(coeff))) ylim[2] = 2*max(exp(coeff))
+  plot(as.integer(term),exp(coeff),xlim=range(xs),ylim=ylim,pch=2,cex=1.5,xaxt='n',ylab='',log='y')
+  mtext('Coefficient',side=2,line=4,las=0,cex=0.8)
+  abline(h=1,lty=2)
+  abline(v=xs,lty=1,col='grey')
+  segments(as.integer(term),exp(lower),as.integer(term),exp(upper))
+  arrows(as.integer(term),exp(lower),as.integer(term),exp(upper),angle=90,code=3,length=0.05)
+  axis(3,at=xs,labels=levels(term)[xs])
+})
+#Distribution
+distrs = aggregate(.$preds[,1],list(levels,.$preds[,.$focus]),length)
+names(distrs) = c('term','focus','count')
+distrs = merge(distrs,aggregate(list(total=distrs$count),list(focus=distrs$focus),sum))
+distrs$prop = with(distrs,count/total)
+par(mar=c(5,5,0,0),las=1)
+xlab = .$labels[[variable]]
+
+
+
 

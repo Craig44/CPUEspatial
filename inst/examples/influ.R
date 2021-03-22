@@ -290,6 +290,7 @@ Influence$calc <- function(.){
   .$summary$trend = trend
 }
 
+
 #' Standardization plot
 #'
 #' This plot simply compares the standardised and unstandardised indices from a model so that the overall standardisation effect can be ascertained.
