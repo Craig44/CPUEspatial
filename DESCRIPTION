@@ -20,6 +20,7 @@ Imports:
     mgcv,
     raster,
     reshape2,
+    MASS,
     Matrix (>= 1.2.17)
 LinkingTo: 
     TMB

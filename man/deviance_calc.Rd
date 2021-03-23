@@ -4,7 +4,7 @@
 \alias{deviance_calc}
 \title{deviance_calc}
 \usage{
-deviance_calc(y, mu, dist, k = NULL)
+deviance_calc(y, mu, dist, phi = NULL)
 }
 \arguments{
 \item{y}{response variable values}

@@ -34,7 +34,7 @@ configure_obj(
 
 \item{family}{0 = Gaussian, 1 = Binomial, 2 = Gamma, 3 = Poisson, 4 = Negative Binomial}
 
-\item{link}{link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity}
+\item{link}{link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity, 5 = inverse squared (1/x^2)}
 
 \item{include_omega}{boolean time-varying spatial GF}
 

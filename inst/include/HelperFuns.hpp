@@ -6,7 +6,8 @@ enum valid_link {
   logit_link               = 1,
   probit_link              = 2,
   inverse_link             = 3,
-  identity_link            = 4
+  identity_link            = 4,
+  inverse_squared_link     = 5  // 1/x^2 default link with inverse gaussian
 };
 /*
 * Valid families
@@ -47,6 +48,9 @@ Type inverse_linkfun(Type& eta, int& link) {
     break;
   case inverse_link:
     ans = Type(1) / eta;
+    break;
+  case inverse_squared_link:
+    ans = Type(1) / (eta * eta);
     break;
     // TODO: Implement remaining links
   default:

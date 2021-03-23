@@ -249,19 +249,28 @@ canonical_fun = function(mu, dist, k = NULL) {
 #' @param mu fitted values from the model
 #' @param dist character values options availble {gaussian, gamma,binomial, neg_binomial, inverse_gaussian, poisson}
 #' @param k the k parameter needed for the negative binomial evaluation
+#' @importFrom MASS neg.bin
+
 #' @export
 #' @return residual deviance
-deviance_calc = function(y, mu, dist, k = NULL) {
-  ## saturated t(y,y)
-  theta_s = canonical_fun(y, dist = dist, k = k)
+deviance_calc = function(y, mu, dist, phi = NULL) {
+  result = NULL
   if(dist == "poisson") {
-    if(sum(y == 0) > 0)
-      warning("the deviance calculation for observations = 0 for poisson I don't think is handled or correct. sorry")
+    result = sum(poisson()$dev.resids(y, mu, wt = rep(1, length(y))))
+  } else if(dist == "binomial") {
+    result = sum(binomial()$dev.resid(y, mu, wt = rep(1, length(y))))
+  } else if(dist == "neg_binomial") {
+    result = sum(neg.bin(theta = phi)$dev.resids(y, mu, wt = rep(1, length(y))))
+  } else {
+    ## saturated t(y,y)
+    theta_s = canonical_fun(y, dist = dist, k = k)
+    ## fitted t(y,mu)
+    theta_fit = canonical_fun(mu, dist = dist, k = k)
+    result = sum(2 * ((y * theta_s - cumulant_fun(theta_s, dist))
+                      - (y * theta_fit - cumulant_fun(theta_fit, dist))))
   }
-  ## fitted t(y,mu)
-  theta_fit = canonical_fun(mu, dist = dist, k = k)
+
   
-  result = sum(2 * ((y * theta_s - cumulant_fun(theta_s, dist))
-                    - (y * theta_fit - cumulant_fun(theta_fit, dist))))
+
   return(result)
 }

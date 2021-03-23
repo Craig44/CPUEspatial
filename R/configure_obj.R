@@ -15,7 +15,7 @@
 #' @param spline_spatial_covariates vector of strings indicating column name
 #' @param mesh an inla.mesh object that has been created before this function is applied
 #' @param family 0 = Gaussian, 1 = Binomial, 2 = Gamma, 3 = Poisson, 4 = Negative Binomial
-#' @param link link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity
+#' @param link link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity, 5 = inverse squared (1/x^2)
 #' @param linear_basis 0 = apply triangulation sparse matrix approach, 1 = Nearest Neighbour
 #' @param apply_preferential_sampling whether to jointly model observation location 
 #' @param preference_model_type integer 0 = Dinsdale approach, 1 = LGCP lattice approach
@@ -136,7 +136,9 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   ## needs to be 2 columns as we estimate n-1 coeffectients so we need at least 2 cols so we have 1 transformed parameter
   ## will be ignored as, the transformed parameters will be fixed at 0
   if(length(spatial_covariates) != 0) {
-    data_spatial_model_matrix = evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
+    ff = paste0(response_variable_label," ~ 0 +",paste(spatial_covariates, collapse = " + "))
+    m <- model.frame(formula(ff), data@data)
+    data_spatial_model_matrix <- model.matrix(formula(ff), m)
     p_s = max(attributes(data_spatial_model_matrix)$assign) # should be the same length as spatial covariate
     if(attributes(data_spatial_model_matrix)$dim[2] == 1) {
       spatial_constrained_coeff_ndx = matrix(-99, nrow = p_s, ncol = 1)
@@ -288,7 +290,13 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
 
     
     if(length(spatial_covariates) > 0) {
-      data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
+      ##  build data spatial model matrix
+      #data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
+      ff = paste0(response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "))
+      m <- model.frame(formula(ff), data@data)
+      data_spatial_model_matrix <- model.matrix(formula(ff), m)
+      
+      ##  build projection spatial model matrix
       ff <- evalit(paste0(response_variable_label," ~ 0 + ", paste(spatial_covariates, collapse = " + ")), e1)
       m <- model.frame(ff, proj_df_subset)
       proj_spatial_model_matrix <- model.matrix(ff, m)
