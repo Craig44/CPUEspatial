@@ -15,6 +15,7 @@ library(gridExtra)
 library(RColorBrewer)
 library(raster)
 library(INLA)
+library(TMB)
 source(file.path("inst", "examples","read_NZ_polys.R"))
 source(file.path("inst", "examples", "influ.R"))
 
@@ -232,7 +233,7 @@ points(data2use2_utm, pch = 16, cex = 0.1)
 years = unique(data2use2$fish_year)
 full_proj_df = NULL
 for(i in 1:length(years)) {
-  df = data.frame(x = coordinates(proj_utm_spdf)[,1], y = coordinates(proj_utm_spdf)[,1], start_stats_area_code = proj_utm_spdf$stat_area, area =  rgeos::gArea(sp_poly_grid), fish_year = as.character(years[i]))
+  df = data.frame(x = coordinates(proj_utm_spdf)[,1], y = coordinates(proj_utm_spdf)[,2], start_stats_area_code = proj_utm_spdf$stat_area, area =  rgeos::gArea(sp_poly_grid), fish_year = as.character(years[i]))
   full_proj_df = rbind(full_proj_df, df)
 }
 dim(full_proj_df)
@@ -287,23 +288,27 @@ apply_preferential_sampling = T
 preference_model_type = 1
 projection_raster_layer = proj_raster_with_active_cells
 
+data2use2_utm$fish_year = as.integer(data2use2_utm$fish_year)
+data2use2_utm$start_stats_area_code = as.factor(data2use2_utm$start_stats_area_code)
+data2use2_utm$fish_month = factor(data2use2_utm$fish_month, levels = month.abb)
+data2use2_utm$vessel_key = as.factor(data2use2_utm$vessel_key)
+data2use2_utm$target_species = as.factor(data2use2_utm$target_species)
+
 non_spatial = configure_obj(data = data2use2_utm, projection_df = full_proj_df, mesh = mesh_utm, family = 0, link = 4, include_omega = F, include_epsilon = F, 
-                           response_variable_label = "log_catch", time_variable_label = "fish_year", catchability_covariates = c("vessel_key","target_species","fish_month"), catchability_covariate_type = c("factor", "factor","factor"), 
-                           spatial_covariates = c("start_stats_area_code"), spatial_covariate_type = c("factor"), spline_catchability_covariates = NULL,
+                           response_variable_label = "log_catch", time_variable_label = "fish_year", catchability_covariates = c("vessel_key","target_species","fish_month"), 
+                           spatial_covariates = c("start_stats_area_code"), spline_catchability_covariates = NULL,
                            spline_spatial_covariates = NULL, trace_level = "high")
 
 non_spatial$obj$fn()
 
-sd_rep = sdreport(non_spatial$obj)
 opt = nlminb(non_spatial$obj$par, non_spatial$obj$fn, non_spatial$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
 opt$convergence
 
+sd_rep = sdreport(non_spatial$obj)
+
 non_spatial_rep = non_spatial$obj$report(non_spatial$obj$env$last.par.best)
 ## glm approach
-glm_data = data@data
-glm_data$fish_year = as.character(glm_data$fish_year)
-glm_data$fish_year = as.factor(glm_data$fish_year)
-glm_data$fish_month = as.factor(glm_data$fish_month)
+glm_data = data2use2_utm@data
 glm_data$fish_year = as.factor(glm_data$fish_year)
 #glm_data$vessel_key
 log_positive = glm(log(BAR_catch) ~ fish_year + vessel_key + target_species + start_stats_area_code +fish_month, offset = area, data = glm_data)
@@ -378,18 +383,25 @@ if(.$orders[[term]]=='coef'){
   levels = factor(levels,levels=coeffs$term,ordered=T)
 }
 
-
-catchability_coef_labs = colnames(non_spatial$tmb_data$model_matrix)
-catch_int = rep$betas[1]
+## get the terms equivalant from CPUEspatial
+catchability_mod_mat = non_spatial$tmb_data$model_matrix
+catchability_coef_labs = colnames(catchability_mod_mat)
 mod_ndx = grepl(catchability_coef_labs, pattern = term)
-temp_coeffs = non_spatial_rep$betas[mod_ndx]
+catchability_intercept = non_spatial_rep$betas[1]
+catchability_coeffs = non_spatial_rep$betas[mod_ndx]
+spatial_mod_mat = non_spatial$tmb_data$X_spatial_ipt[,,1]
+catch_terms = sweep(catch_mod_mat ,MARGIN=2,non_spatial_rep$betas,`*`)  
+spatial_terms = sweep(spatial_mod_mat ,MARGIN=2,non_spatial_rep$spatial_betas,`*`)  
+
+this_term_cpue = c(catchability_intercept, catchability_intercept + temp_coeffs)
+
+## get the GLM equivalent
 names(temp_coeffs) = catchability_coef_labs[mod_ndx]
 raw_coeffs = coef(log_positive)
 glm_raw_coeffs = grepl(names(raw_coeffs), pattern = term)
 raw_coeffs[glm_raw_coeffs]
 
 this_term_glm = c(raw_coeffs[1], raw_coeffs[1] + raw_coeffs[glm_raw_coeffs])
-this_term_cpue = c(catch_int, catch_int + temp_coeffs)
 
 this_term_glm - mean(this_term_glm)
 this_term_cpue - mean(this_term_cpue)
