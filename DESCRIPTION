@@ -21,6 +21,7 @@ Imports:
     raster,
     reshape2,
     MASS,
+    dplyr,
     Matrix (>= 1.2.17)
 LinkingTo: 
     TMB

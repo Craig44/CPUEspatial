@@ -280,7 +280,7 @@ Influence$calc <- function(.){
           mean
         )
         overall = c(overall,with(infl,exp(mean(abs(value)))-1))
-        trend = c(trend,with(infl,exp(cov(1:length(value),value)/var(1:length(value)))-1))
+        trend = c(trend, with(infl,exp(cov(1:length(value),value)/var(1:length(value)))-1))
         names(infl) = c('level',term)
         .$influences = merge(.$influences,infl,all.x=T,by='level')
       }

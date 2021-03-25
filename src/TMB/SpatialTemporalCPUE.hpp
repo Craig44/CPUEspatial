@@ -366,6 +366,11 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   SIMULATE {
     REPORT(y_i);
   }
+  vector<Type> betas_w_intercept(betas.size());
+  betas_w_intercept(0) = betas(0);
+  for(i = 1; i < betas_w_intercept.size(); ++i)
+    betas_w_intercept(i) = betas(0) + betas(i);
+    
   //////////////////
   // Report section
   //////////////////
@@ -389,6 +394,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( nll );
   REPORT( betas );
   REPORT( spatial_betas );
+  REPORT( betas_w_intercept );
   REPORT( spatial_splines )
   REPORT( time_betas );
   REPORT( relative_index);
@@ -416,7 +422,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( spatial_betas );
   ADREPORT( betas );
   ADREPORT( time_betas );
-  
+  ADREPORT( betas_w_intercept );
   //ADREPORT( relative_index );
   //ADREPORT( standardised_index );
   

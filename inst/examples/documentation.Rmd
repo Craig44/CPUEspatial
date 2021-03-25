@@ -166,3 +166,9 @@ The denisty is
 \end{equation}
 The common approach for Cox models, is to create a fine lattice over the observation window \((\Omega)\) and then model the number of points in cell \(s_{ij}\) (\(N_{ij}\) ) of the lattice. \(N_{ij} \sim Po(\Lambda_{ij})\) where, \(\Lambda_{ij} = \int_{s_{ij}}\lambda(s)ds\). Again back to an intractable integral so the approximated is made where, \(\Lambda_{ij} \approx |s_{ij}|exp(z_{ij})\), where \(z_{ij}\) is a representative value of \(Z(s)\) and \(|s_{ij}\) is the area of the cell. An alternative approach is to use the dual mesh from the Simpson et.al. 2016 paper (I ran into issues with this approach).
 
+
+
+## Goodness of Fit metrics
+The approaches in this package is a predictive based appraoch using DHARMa R package
+
+

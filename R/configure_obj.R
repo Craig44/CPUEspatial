@@ -34,7 +34,9 @@
 #' @return: list of estimated objects and data objects
 configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
                          spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, projection_raster_layer = NULL, trace_level = "none") {
-  e1 <- parent.frame()
+  Call = list()
+  Call$func_call <- match.call()
+  e1 <- parent.frame() ## found this is needed for the evalit function
   if(!trace_level %in% c("none", "low", "medium","high"))
     stop(paste0("trace_level needs to be 'none', 'low', 'medium','high'"))
   if(class(data) != "SpatialPointsDataFrame")
@@ -115,16 +117,17 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   
   ## model matrix for linear effects
   ff = paste0(response_variable_label," ~ 0 + factor(",time_variable_label,")")
-  m <- model.frame(formula(ff), data@data)
+  m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
   time_model_matrix <- model.matrix(formula(ff), data = m)
-  
+  Call$time = ff
   if(trace_level != "none")
     print(paste0("built time_model_matrix"))
   
   model_matrix = matrix(1, nrow = n, ncol = 1);
   if(length(catchability_covariates) != 0) {
     ff = paste0(response_variable_label," ~ ",paste(catchability_covariates, collapse = " + "))
-    m <- model.frame(formula(ff), data@data)
+    Call$catchability = ff
+    m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
     model_matrix <- model.matrix(formula(ff), m)
   }
   
@@ -137,7 +140,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   ## will be ignored as, the transformed parameters will be fixed at 0
   if(length(spatial_covariates) != 0) {
     ff = paste0(response_variable_label," ~ 0 +",paste(spatial_covariates, collapse = " + "))
-    m <- model.frame(formula(ff), data@data)
+    Call$spatial = ff
+    m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
     data_spatial_model_matrix <- model.matrix(formula(ff), m)
     p_s = max(attributes(data_spatial_model_matrix)$assign) # should be the same length as spatial covariate
     if(attributes(data_spatial_model_matrix)$dim[2] == 1) {
@@ -250,8 +254,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
       stop(paste0("the object projection_raster_layer, needs to have the data values == 1, for each projection cell. Found sum(projection_raster_layer@data@values == 1) = ", sum(projection_raster_layer@data@values == 1) , " and n_z projection cells = ", n_z))
   }
   
-  X_spatial_proj_zpt = array(1, dim = c(n_z, ncol(data_spatial_model_matrix), n_t))
-  X_spatial_ipt = array(1, dim = c(n, ncol(data_spatial_model_matrix), n_t))
+  X_spatial_proj_zpt = array(1, dim = c(n_z, ncol(data_spatial_model_matrix), n_t), dimnames = list(NULL, colnames(data_spatial_model_matrix), NULL))
+  X_spatial_ipt = array(1, dim = c(n, ncol(data_spatial_model_matrix), n_t), dimnames = list(NULL, colnames(data_spatial_model_matrix), NULL))
   spline_spatial_model_matrix_proj_zpt = array(0, dim = c(n_z, ncol(spline_spatial_$X[,-1]), n_t))
   spline_spatial_model_matrix_ipt = array(spline_spatial_$X[,-1], dim = c(n, ncol(spline_spatial_$X[,-1]), n_t))
   Nij = array(0, dim = c(n_z, n_t))
@@ -293,12 +297,12 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
       ##  build data spatial model matrix
       #data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
       ff = paste0(response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "))
-      m <- model.frame(formula(ff), data@data)
+      m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
       data_spatial_model_matrix <- model.matrix(formula(ff), m)
       
       ##  build projection spatial model matrix
       ff <- evalit(paste0(response_variable_label," ~ 0 + ", paste(spatial_covariates, collapse = " + ")), e1)
-      m <- model.frame(ff, proj_df_subset)
+      m <- model.frame(ff, proj_df_subset, drop.unused.levels = T)
       proj_spatial_model_matrix <- model.matrix(ff, m)
       if(ncol(proj_spatial_model_matrix) != ncol(data_spatial_model_matrix))
         stop("when building model matrix for spatial_covariates. The columns of projection model matrix differed from the columns of data model matrix. This can happen when there are levels in one data set that are not in the other. you might want to investigate these covariates.")
@@ -459,8 +463,9 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   
   if(trace_level != "none")
     print(paste0("Passed: successfully built obj"))
-  
-  return(list(obj = obj, tmb_pars = params, tmb_data = tmb_data))
+  Call$link = link
+  Call$family = family
+  return(list(obj = obj, tmb_pars = params, tmb_data = tmb_data, Call = Call))
 }
 
 

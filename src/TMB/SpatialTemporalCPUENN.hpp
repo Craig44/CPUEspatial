@@ -373,7 +373,14 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   //std::cout << nll(i) << " ";
   //std::cout << std::endl;
   
-  
+  SIMULATE {
+    REPORT(y_i);
+  }
+  vector<Type> betas_w_intercept(betas.size());
+  betas_w_intercept(0) = betas(0);
+  for(i = 1; i < betas_w_intercept.size(); ++i)
+    betas_w_intercept(i) = betas(0) + betas(i);
+
   //////////////////
   // Report section
   //////////////////
@@ -397,6 +404,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   REPORT( spatial_betas );
   REPORT( spatial_splines )
   REPORT( time_betas );
+  REPORT( betas_w_intercept );
   REPORT( relative_index);
   //REPORT( standardised_index );
   //REPORT( gmean );
@@ -428,6 +436,8 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   ADREPORT( spatial_betas );
   ADREPORT( betas );
   ADREPORT( time_betas );
+  ADREPORT( betas_w_intercept );
+  
   //ADREPORT( relative_index );
   //ADREPORT( standardised_index );
   

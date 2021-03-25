@@ -58,6 +58,6 @@ test_that("config", {
   
 
   ## validate by looking at log likelihood is value
-  expect_true(length(simple_model) == 3)
+  expect_true(length(simple_model) == 4)
   
   })

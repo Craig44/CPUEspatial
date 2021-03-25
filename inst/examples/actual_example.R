@@ -16,11 +16,14 @@ library(RColorBrewer)
 library(raster)
 library(INLA)
 library(TMB)
+library(dplyr)
 source(file.path("inst", "examples","read_NZ_polys.R"))
 source(file.path("inst", "examples", "influ.R"))
 
 head(cpue_df)
 cpue_df$area = cpue_df$fishing_distance * cpue_df$effort_width/1000 # km^2
+## remove zero area fishing events
+cpue_df = subset(cpue_df, subset = cpue_df$area > 0)
 cpue_df$log_catch = log(cpue_df$BAR_catch)
 bad_ndx = names(table(cpue_df$vessel_key))[table(cpue_df$vessel_key) < 5]
 dim(cpue_df)
@@ -238,6 +241,8 @@ for(i in 1:length(years)) {
 }
 dim(full_proj_df)
 full_proj_df$log_catch = 1
+full_proj_df$BAR_catch = 1
+
 coordinates(full_proj_df) <- ~ x + y
 proj4string(full_proj_df) <- proj
 
@@ -268,38 +273,20 @@ plot(nz.stat_area_utm)
 points(coordinates(full_proj_df[na_ndx,]), col = "red", cex =2)
 
 
-data = data2use2_utm
-projection_df = full_proj_df
-mesh = mesh_utm
-family = 0
-link = 4
-include_omega = F
-include_epsilon = F 
-response_variable_label = "log_catch"
-time_variable_label = "fish_year"
-catchability_covariates = c("vessel_key","target_species","fish_month")
-catchability_covariate_type = c("factor", "factor","factor")
-spatial_covariates = c("start_stats_area_code")
-spatial_covariate_type = c("factor")
-spline_catchability_covariates = NULL
-spline_spatial_covariates = NULL
-trace_level = "high"
-apply_preferential_sampling = T
-preference_model_type = 1
-projection_raster_layer = proj_raster_with_active_cells
-
+## deal with covaraiate types
 data2use2_utm$fish_year = as.integer(data2use2_utm$fish_year)
 data2use2_utm$start_stats_area_code = as.factor(data2use2_utm$start_stats_area_code)
 data2use2_utm$fish_month = factor(data2use2_utm$fish_month, levels = month.abb)
 data2use2_utm$vessel_key = as.factor(data2use2_utm$vessel_key)
 data2use2_utm$target_species = as.factor(data2use2_utm$target_species)
 
-non_spatial = configure_obj(data = data2use2_utm, projection_df = full_proj_df, mesh = mesh_utm, family = 0, link = 4, include_omega = F, include_epsilon = F, 
-                           response_variable_label = "log_catch", time_variable_label = "fish_year", catchability_covariates = c("vessel_key","target_species","fish_month"), 
+non_spatial = configure_obj(data = data2use2_utm, projection_df = full_proj_df, mesh = mesh_utm, family = 0, link = 0, include_omega = F, include_epsilon = F, 
+                           response_variable_label = "BAR_catch", time_variable_label = "fish_year", catchability_covariates = c("vessel_key","target_species","fish_month"), 
                            spatial_covariates = c("start_stats_area_code"), spline_catchability_covariates = NULL,
                            spline_spatial_covariates = NULL, trace_level = "high")
 
-non_spatial$obj$fn()
+check_gradients(non_spatial$obj)
+
 
 opt = nlminb(non_spatial$obj$par, non_spatial$obj$fn, non_spatial$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
 opt$convergence
@@ -311,14 +298,60 @@ non_spatial_rep = non_spatial$obj$report(non_spatial$obj$env$last.par.best)
 glm_data = data2use2_utm@data
 glm_data$fish_year = as.factor(glm_data$fish_year)
 #glm_data$vessel_key
-log_positive = glm(log(BAR_catch) ~ fish_year + vessel_key + target_species + start_stats_area_code +fish_month, offset = area, data = glm_data)
+log_positive = glm((BAR_catch) ~ fish_year + vessel_key + target_species + start_stats_area_code +fish_month, offset = log(area), data = glm_data, family = gaussian(link = "log"))
+summary(log_positive)$dispersion
+non_spatial_rep$phi
+## check they give the same estimates
+logLik(log_positive)
+opt$objective
 
+par_labs = names(sd_rep$value)
+
+sd_rep$sd[par_labs %in% "betas"]
+sd_rep$sd[par_labs %in% "betas_w_intercept"]
+sd_rep$value[par_labs %in% "betas"]
+sd_rep$value[par_labs %in% "betas_w_intercept"]
+
+
+## compare estiamted coeffecients
+term = "fish_month"
+glm_coefs = coefficients(log_positive)
+contrast_month = glm_coefs[grepl(names(glm_coefs), pattern = term)]
+
+catchability_mod_mat = non_spatial$tmb_data$model_matrix
+catchability_coef_labs = colnames(catchability_mod_mat)
+catchability_intercept = non_spatial_rep$betas[1]
+mod_ndx = grepl(catchability_coef_labs, pattern = term)
+catchability_coeffs = non_spatial_rep$betas[mod_ndx]
+
+labs = substring(catchability_coef_labs[mod_ndx], first = nchar(term) + 1)
+
+
+ff = formula(non_spatial$Call$catchability)
+factor_lab = get_all_vars(ff, data = data2use2_utm@data, drop.unused.levels = T)
+factor_lab$time = data2use2_utm@data[, "fish_year"]
+data_labs = unique(as.character(factor_lab[,term]))
+intercept = data_labs[!data_labs %in% labs]
+labs = c(intercept, labs)
+mod_ndx[1] = T
+coeffs_ = data.frame(lab = labs, MLE = sd_rep$value[par_labs %in% "betas_w_intercept"][mod_ndx],
+                     SE = sd_rep$sd[par_labs %in% "betas_w_intercept"][mod_ndx])
+coeffs_$upper = coeffs_$MLE + 2* coeffs_$SE
+coeffs_$lower = coeffs_$MLE - 2* coeffs_$SE
+coeffs_$lab = factor(coeffs_$lab,levels=month.abb,ordered=T)
+
+contrast_month
+catchability_coeffs
+# looks good
 ##################################################
 ## Influence Plots calculations
 ##################################################
 myInfl = Influence$new(model = log_positive)
 myInfl$calc()
 myInfl$summary
+
+myInfl_cpue = calculate_influence(non_spatial, data2use2_utm)
+myInfl$summary$overall
 
 tab = kable(myInfl$summary,
             row.names = FALSE,
@@ -383,20 +416,24 @@ if(.$orders[[term]]=='coef'){
   levels = factor(levels,levels=coeffs$term,ordered=T)
 }
 
+
 ## get the terms equivalant from CPUEspatial
 catchability_mod_mat = non_spatial$tmb_data$model_matrix
 catchability_coef_labs = colnames(catchability_mod_mat)
 mod_ndx = grepl(catchability_coef_labs, pattern = term)
+mod_ndx[1] = TRUE
+
 catchability_intercept = non_spatial_rep$betas[1]
 catchability_coeffs = non_spatial_rep$betas[mod_ndx]
 spatial_mod_mat = non_spatial$tmb_data$X_spatial_ipt[,,1]
-catch_terms = sweep(catch_mod_mat ,MARGIN=2,non_spatial_rep$betas,`*`)  
+catch_terms = sweep(catchability_mod_mat ,MARGIN=2,non_spatial_rep$betas,`*`)  
+
 spatial_terms = sweep(spatial_mod_mat ,MARGIN=2,non_spatial_rep$spatial_betas,`*`)  
 
-this_term_cpue = c(catchability_intercept, catchability_intercept + temp_coeffs)
+this_term_cpue = c(catchability_intercept, catchability_intercept + catchability_coeffs)
+names(this_term_cpue) = c(catchability_coef_labs[1], catchability_coef_labs[mod_ndx])
 
 ## get the GLM equivalent
-names(temp_coeffs) = catchability_coef_labs[mod_ndx]
 raw_coeffs = coef(log_positive)
 glm_raw_coeffs = grepl(names(raw_coeffs), pattern = term)
 raw_coeffs[glm_raw_coeffs]
@@ -409,10 +446,17 @@ this_term_cpue - mean(this_term_cpue)
 plot(this_term_glm)
 points(this_term_cpue, col = "red")
 
-
-plot()
-#Coefficients
+# Estiamted Coefficients
 coeffs = aggregate(.$preds[,paste(c('fit','se.fit'),term,sep='.')],list(levels),mean)
+this_term_glm
+## the same to a constant
+coeffs$fit.fish_month - min(coeffs$fit.fish_month)
+this_term_glm - min(this_term_glm)
+
+
+
+
+
 names(coeffs) = c('term','coeff','se')
 coeffs = within(coeffs,{
   lower = coeff-se
@@ -433,6 +477,31 @@ with(coeffs,{
   arrows(as.integer(term),exp(lower),as.integer(term),exp(upper),angle=90,code=3,length=0.05)
   axis(3,at=xs,labels=levels(term)[xs])
 })
+
+
+par(mar=c(0,5,3,0),las=1)
+with(coeffs_,{
+  xs = 1:max(as.integer(lab))
+  ylim = c(min((lower)),max((upper)))
+  if(ylim[1]<0.5*min(( MLE))) ylim[1] = 0.5*min(( MLE))
+  if(ylim[2]>2*max(( MLE))) ylim[2] = 2*max(( MLE))
+  plot(as.integer(lab), (MLE), xlim = range(xs),ylim=ylim,pch=2,cex=1.5,xaxt='n',ylab='',log='y')
+  mtext('Coefficients',side=2,line=4,las=0,cex=0.8)
+  abline(h=1,lty=2)
+  abline(v=xs,lty=1,col='grey')
+  segments(as.integer(lab),(lower),as.integer(lab),(upper))
+  arrows(as.integer(lab),(lower),as.integer(lab),(upper),angle=90,code=3,length=0.05)
+  axis(3,at=xs,labels=levels(lab))
+})
+
+## number of observatons over time among the levels in a variable
+distr = factor_lab %>% 
+  group_by(get(term), time) %>%
+  summarise(n = length(time))
+distr = distr %>% group_by(time) %>% mutate(n_total = sum(n))
+distr$n_prop = distr$n / distr$n_total
+colnames(distr) = c("term", non_spatial$Call$func_call$time_variable_label, "n","n_total","n_prop")
+distr$fish_year = factor(distr$fish_year, levels = min(distr$fish_year):max(distr$fish_year))
 #Distribution
 distrs = aggregate(.$preds[,1],list(levels,.$preds[,.$focus]),length)
 names(distrs) = c('term','focus','count')
@@ -441,6 +510,64 @@ distrs$prop = with(distrs,count/total)
 par(mar=c(5,5,0,0),las=1)
 xlab = .$labels[[variable]]
 
+table(distrs$total)
+table(distr$n_total)
+
+
+par(mar=c(5,5,0,0),las=1)
+xlab = term
+if(is.null(xlab)) xlab = variable
+ylab= .$labels[[.$focus]]
+if(is.null(ylab)) ylab = .$focus
+with(distrs,{
+  xs = 1:max(as.integer(term))
+  ys = 1:max(as.integer(focus))
+  plot(NA,xlim=range(xs),ylim=range(ys),xaxt='n',yaxt='n',xlab=xlab,ylab='')
+  abline(v=xs,lty=1,col='grey')
+  axis(1,at=xs,labels=levels(term)[xs])
+  abline(h=ys,lty=1,col='grey')
+  axis(2,at=ys,labels=levels(focus)[ys])
+  mtext(ylab,side=2,line=4,las=0,cex=0.8)
+  points(as.integer(term),as.integer(focus),cex=sqrt(prop)*12)
+})
+
+## distribution of events (observatons) not catch
+par(mar=c(5,5,0,0),las=1)
+xlab = term
+if(is.null(xlab)) xlab = variable
+ylab= non_spatial$Call$func_call$time_variable_label
+if(is.null(ylab)) ylab = .$focus
+with(distr,{
+  xs = 1:max(as.integer(term))
+  ys = 1:max(as.integer(get(ylab)))
+  plot(NA,xlim=range(xs),ylim=range(ys),xaxt='n',yaxt='n',xlab=xlab,ylab='')
+  abline(v=xs,lty=1,col='grey')
+  axis(1,at=xs,labels=levels(term)[xs])
+  abline(h=ys,lty=1,col='grey')
+  axis(2,at=ys,labels=levels(get(ylab))[ys])
+  mtext(ylab,side=2,line=4,las=0,cex=0.8)
+  points(as.integer(term),as.integer(get(ylab)),cex=sqrt(n_prop)*12)
+})
+
+
+
+#Calculate influences and statisitcs
+.$influences = data.frame(level=levels(.$model$model[,.$focus]))
+overall = c(NA,NA) # NAs for null model and for focus term
+trend = c(NA,NA)
+for(term in .$terms){
+  if(term != .$focus){
+    infl = aggregate(
+      list(value = .$preds[,paste('fit',term,sep='.')]),
+      list(level = .$preds[,.$focus]),
+      mean
+    )
+    overall = c(overall,with(infl,exp(mean(abs(value)))-1))
+    trend = c(trend,with(infl,exp(cov(1:length(value),value)/var(1:length(value)))-1))
+    names(infl) = c('level',term)
+    .$influences = merge(.$influences,infl,all.x=T,by='level')
+  }
+}
 
 
 

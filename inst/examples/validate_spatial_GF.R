@@ -210,7 +210,6 @@ AIC = 2*opt_spa$objective + 2*length(simple_spatial_model$obj$par)
 attr(glm_fit_spa, "family")
 attributes(glm_fit_spa)
 
-
 # Diagnostics
 obs_fit_df = data.frame(obs = sampData$y_i, glm = fitted.values(glm_fit_spa), CPUEspatial = rep$mu)
 round(head(obs_fit_df),3)

@@ -12,6 +12,24 @@ evalit = function (x, ...)  {
   eval(parse(text = x), ...)
 }
 
+#' check_gradients
+#' @details checks a TMB object for fixed effect parameters that have 0 gradients, suggesting they don't contribute the log likelihood. And you should 
+#' look into these parameters.
+#' @param obj A TMB list that has been built by MakeAdFun
+#' @export
+#' @return character of good news or labels of problem parameters
+#' 
+check_gradients = function(obj) {
+  if(sum(obj$gr() == 0)) {
+    return("no Non-zero gradients, give estimating a go")
+  } else {
+    return(names(obj$par)[which(obj$gr() == 0)])
+  }
+  return(NULL)
+}
+
+
+
 #' inverse_link
 #' @details applies the inverse of the link function
 #' log_link                 = 0
