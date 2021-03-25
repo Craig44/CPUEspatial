@@ -23,6 +23,7 @@ calculate_influence = function(conf_obj, data_df) {
   time_lab = eval(conf_obj$Call$func_call$time_variable_label)
   catch_terms = eval(conf_obj$Call$func_call$catchability_covariates)
   spatial_terms = eval( conf_obj$Call$func_call$spatial_covariates)
+  all_terms = c(catch_terms, spatial_terms)
   ## get term type
   catchability_type = spatial_type = vector()
   for(i in 1:length(spatial_terms))
@@ -42,7 +43,7 @@ calculate_influence = function(conf_obj, data_df) {
   spatial_lab_df$time = data_df@data[, time_lab]
   
   ## get coeffecients for each term and estimated standand error
-  catch_terms_ls = spatial_terms_ls = list()
+  terms_ls = list()
   for(i in 1:length(catch_terms)) {
     coeff_ndx = grepl(catchability_coef_labs, pattern = catch_terms[i])
     labs = substring(catchability_coef_labs[coeff_ndx], first = nchar(catch_terms[i]) + 1)
@@ -54,7 +55,8 @@ calculate_influence = function(conf_obj, data_df) {
       data_labs = unique(as.character(catchability_lab_df[,catch_terms[i]]))
       intercept = data_labs[!data_labs %in% labs]
       labs = c(intercept, labs)
-      catch_terms_ls[[catch_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
+      labs = factor(labs, levels = levels(data_df@data[, catch_terms[i]]))
+      terms_ls[[catch_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
       ## attach coeffecients catchability_lab_df
       orig_colnames = colnames(catchability_lab_df)
       data_terms = get(catch_terms[i], catchability_lab_df)
@@ -66,7 +68,7 @@ calculate_influence = function(conf_obj, data_df) {
       ## just slope parameter
       MLE = sd_rep$value[sd_rep_labs %in% "betas"][coeff_ndx]
       se = sd_rep$sd[sd_rep_labs %in% "betas"][coeff_ndx]
-      catch_terms_ls[[catch_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
+      terms_ls[[catch_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
       orig_colnames = colnames(catchability_lab_df)
       data_terms = get(catch_terms[i], catchability_lab_df)
       catchability_lab_df = cbind(catchability_lab_df, MLE * data_terms)
@@ -80,8 +82,9 @@ calculate_influence = function(conf_obj, data_df) {
     if(spatial_type[i] == "factor") { #include intercept
       MLE = sd_rep$value[sd_rep_labs %in% "spatial_betas"][coeff_ndx]
       se = sd_rep$sd[sd_rep_labs %in% "spatial_betas"][coeff_ndx]
+      labs = factor(labs)
       ## find levels
-      spatial_terms_ls[[spatial_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
+      terms_ls[[spatial_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
       ## attach coeffecients catchability_lab_df
       orig_colnames = colnames(spatial_lab_df)
       data_terms = get(spatial_terms[i], spatial_lab_df)
@@ -93,7 +96,7 @@ calculate_influence = function(conf_obj, data_df) {
       ## just slope parameter
       MLE = sd_rep$value[sd_rep_labs %in% "spatial_betas"][coeff_ndx]
       se = sd_rep$sd[sd_rep_labs %in% "spatial_betas"][coeff_ndx]
-      spatial_terms_ls[[spatial_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
+      terms_ls[[spatial_terms[i]]] = data.frame(labs = labs, MLE = MLE, SE = se, lower = MLE - 2*se, upper = MLE + 2 * se)
       orig_colnames = colnames(spatial_lab_df)
       data_terms = get(spatial_terms[i], spatial_lab_df)
       spatial_lab_df = cbind(spatial_lab_df, MLE * data_terms)
@@ -102,7 +105,7 @@ calculate_influence = function(conf_obj, data_df) {
   }
   ## get distribution of observations
   ## number of observatons over time among the levels in a variable
-  catchability_distr = spatial_distr = list()
+  all_distr = list()
   for(i in 1:length(catch_terms)) {
     distr = suppressMessages(catchability_lab_df %>% 
       group_by(get(catch_terms[i]), time) %>%
@@ -111,7 +114,7 @@ calculate_influence = function(conf_obj, data_df) {
     distr$n_prop = distr$n / distr$n_total
     distr$time = factor(distr$time, levels = min(distr$time):max(distr$time))
     colnames(distr) = c("term", conf_obj$Call$func_call$time_variable_label, "n","n_total","n_prop")
-    catchability_distr[[catch_terms[i]]] = distr
+    all_distr[[catch_terms[i]]] = distr
   }
   for(i in 1:length(spatial_terms)) {
     distr = suppressMessages(spatial_lab_df %>% 
@@ -121,11 +124,11 @@ calculate_influence = function(conf_obj, data_df) {
     distr$n_prop = distr$n / distr$n_total
     distr$time = factor(distr$time, levels = min(distr$time):max(distr$time))
     colnames(distr) = c("term", conf_obj$Call$func_call$time_variable_label, "n","n_total","n_prop")
-    spatial_distr[[catch_terms[i]]] = distr
+    all_distr[[spatial_terms[i]]] = distr
   }
   ## now influence metrics
   overall_influence = vector()
-  catchability_influence_df = spatial_influence_df = NULL;
+  influence_df = NULL;
   counter = 1;
   for(i in 1:length(catch_terms)) {
     mean_term = mean(get(paste0(catch_terms[i], ".fit"), catchability_lab_df), i = 1)
@@ -133,32 +136,31 @@ calculate_influence = function(conf_obj, data_df) {
       group_by(time) %>%
       summarise(delta = mean(get(paste0(catch_terms[i], ".fit")) - mean_term)))
     if(i == 1) {
-      catchability_influence_df = influence_
+      influence_df = influence_
     } else {
-      catchability_influence_df = cbind(catchability_influence_df, influence_$delta)
+      influence_df = cbind(influence_df, influence_$delta)
     }
     overall_influence[counter] = exp(mean(abs(influence_$delta))) - 1
     counter = counter + 1
   }
-  colnames(catchability_influence_df) = c("time", catch_terms)
   for(i in 1:length(spatial_terms)) {
     mean_term = mean(get(paste0(spatial_terms[i], ".fit"), spatial_lab_df), i = 1)
     influence_ = suppressMessages(spatial_lab_df %>%
       group_by(time) %>%
       summarise(delta = mean(get(paste0(spatial_terms[i], ".fit")) - mean_term)))
-    if(i == 1) {
-      spatial_influence_df = influence_
+    if(is.null(influence_df)) {
+      influence_df = influence_
     } else {
-      spatial_influence_df = cbind(spatial_influence_df, influence_$delta)
+      influence_df = cbind(influence_df, influence_$delta)
     }
     overall_influence[counter] = exp(mean(abs(influence_$delta))) - 1
     counter = counter + 1
   }
   names(overall_influence) = c(catch_terms, spatial_terms)
-  colnames(spatial_influence_df) = c("time", spatial_terms)
+  colnames(influence_df) = c("time", catch_terms, spatial_terms)
   ## overall influence
   
-  return(list(spatial_influence_df = spatial_influence_df, catchability_influence_df = catchability_influence_df, catchability_distr = catchability_distr, spatial_distr = spatial_distr, catch_terms_ls = catch_terms_ls, spatial_terms_ls = spatial_terms_ls, catchability_lab_df = catchability_lab_df, spatial_lab_df = spatial_lab_df, overall_influence = overall_influence))
+  return(list(influence_df = influence_df, all_distr = all_distr, terms_ls = terms_ls, catchability_lab_df = catchability_lab_df, spatial_lab_df = spatial_lab_df, overall_influence = overall_influence))
 }
 
 

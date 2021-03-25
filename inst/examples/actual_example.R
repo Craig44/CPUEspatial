@@ -352,6 +352,7 @@ myInfl$summary
 
 myInfl_cpue = calculate_influence(non_spatial, data2use2_utm)
 myInfl$summary$overall
+myInfl_cpue$overall_influence
 
 tab = kable(myInfl$summary,
             row.names = FALSE,
