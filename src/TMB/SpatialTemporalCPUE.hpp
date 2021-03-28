@@ -247,6 +247,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     }
     vector<Type> splineForReport = designMatrixForReport * gammas;
     REPORT( splineForReport );
+    ADREPORT( splineForReport );
     REPORT( lambda );
     REPORT( gammas );
   }
@@ -263,6 +264,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     }
     vector<Type> splineForReport_spatial = designMatrixForReport_spatial * gammas_spatial;
     REPORT( splineForReport_spatial );
+    ADREPORT( splineForReport_spatial );
     REPORT( lambda_spatial );
     REPORT( gammas_spatial );
   }
@@ -423,6 +425,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( betas );
   ADREPORT( time_betas );
   ADREPORT( betas_w_intercept );
+  
+  
   //ADREPORT( relative_index );
   //ADREPORT( standardised_index );
   

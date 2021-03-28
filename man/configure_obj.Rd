@@ -5,7 +5,7 @@
 \title{configure_obj}
 \usage{
 configure_obj(
-  data,
+  observed_df,
   projection_df,
   mesh,
   family,
@@ -26,9 +26,9 @@ configure_obj(
 )
 }
 \arguments{
-\item{data}{SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'}
+\item{observed_df}{SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'}
 
-\item{projection_df}{SpatialPointsDataFrameneeds to have the same variable names (colnames) as data. Should supply variable values for all projection cells over all time steps}
+\item{projection_df}{SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps}
 
 \item{mesh}{an inla.mesh object that has been created before this function is applied}
 
@@ -40,7 +40,7 @@ configure_obj(
 
 \item{include_epsilon}{boolean time-invariant spatial GF}
 
-\item{response_variable_label}{character relating to a column name in data}
+\item{response_variable_label}{character relating to a column name in observed_df}
 
 \item{time_variable_label}{character relating to a column names needs to be an integer variable}
 
@@ -58,7 +58,7 @@ configure_obj(
 
 \item{preference_model_type}{integer 0 = Dinsdale approach, 1 = LGCP lattice approach}
 
-\item{projection_raster_layer}{a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The data slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
+\item{projection_raster_layer}{a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 TODO add whether we want to use Nearest Neighbour approach NN.}
 
 \item{trace_level}{'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation.}

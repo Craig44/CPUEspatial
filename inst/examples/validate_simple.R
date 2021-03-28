@@ -109,7 +109,7 @@ projection_raster_layer = NULL
 #save(data, full_proj_df, year_coef, fleet_coef, mesh, file = "non_spatial_glm.RData")
 
 
-simple_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
+simple_model = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
                              response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
                              spatial_covariates = NULL, spline_catchability_covariates = NULL,
                              spline_spatial_covariates = NULL, trace_level = "high")

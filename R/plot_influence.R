@@ -1,9 +1,9 @@
 #' plot_influence
 #'
-#' @details
+#' @details plotting function to generate CDI plots from The Bentley paper
 #'
 #' @param influence_info a list that has been outputed by calculate_influence() function
-#' @param term
+#' @param term character that represents the covariate term you want the plot to generate it for.
 #' @return gg plot
 #' @export
 #'
@@ -18,7 +18,7 @@ plot_influence = function(influence_info, term) {
     ylim = c(min((lower)),max((upper)))
     if(ylim[1]<0.5*min((MLE))) ylim[1] = 0.5*min((MLE))
     if(ylim[2]>2*max((MLE))) ylim[2] = 2*max((MLE))
-    plot(as.integer(labs),(MLE),xlim=range(xs),ylim=ylim,pch=16,cex=1.5,xaxt='n',ylab='',log='y', lwd = 2)
+    plot(as.integer(labs),(MLE),xlim=range(xs),ylim=ylim,pch=16,cex=1.5,xaxt='n',ylab='', lwd = 2)
     mtext('Coefficient (+- 2SE)',side=2,line=4,las=0,cex=0.8)
     abline(h=1,lty=2)
     abline(v=xs,lty=1,col='grey')
@@ -26,7 +26,6 @@ plot_influence = function(influence_info, term) {
     arrows(as.integer(labs),(lower),as.integer(labs),(upper),angle=90,code=3,length=0.05, lwd = 2)
     axis(3,at=xs,labels=levels(labs)[xs])
   })
-  
   ## distribution of events (observatons) not catch
   par(mar=c(5,5,0,0),las=1)
   xlab = term

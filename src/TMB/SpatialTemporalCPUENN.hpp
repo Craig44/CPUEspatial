@@ -249,6 +249,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
     }
     vector<Type> splineForReport = designMatrixForReport * gammas;
     REPORT( splineForReport );
+    ADREPORT( splineForReport );
     REPORT( lambda );
     REPORT( gammas );
   }
@@ -265,6 +266,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
     }
     vector<Type> splineForReport_spatial = designMatrixForReport_spatial * gammas_spatial;
     REPORT( splineForReport_spatial );
+    ADREPORT( splineForReport_spatial );
     REPORT( lambda_spatial );
     REPORT( gammas_spatial );
   }

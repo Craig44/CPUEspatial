@@ -10,7 +10,7 @@ library(RandomFields)
 library(RANN)
 library(ggplot2)
 library(mgcv) 
-library('schoenberg') # useful for plotting splines/smoother functions
+library(gratia) # useful for plotting splines/smoother functions
 source(file.path("inst","examples","canonical.index.R"))
 gm_mean = function(x, na.rm=TRUE){
   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
@@ -138,13 +138,20 @@ full_proj_df$y_i = 1
 full_proj_df$area = 1 ## equal area
 
 data = sampData
+data$fleet_ndx = factor(data$fleet_ndx)
+reg_lab = c("A","B","C","D")
+data$region_lab = reg_lab[data$region]
+full_proj_df$region_lab = reg_lab[full_proj_df$region]
+
 coordinates(data) <- ~ x + y
 coordinates(full_proj_df) <- ~ x + y
 
+
+
 ## check they all configure correclty
-simple_spatial_model = configure_obj(data = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
-                                     response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", catchability_covariate_type = "factor", 
-                                     spatial_covariates = c("region"), spatial_covariate_type = c("factor"), spline_catchability_covariates = NULL,
+simple_spatial_model = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
+                                     response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx",
+                                     spatial_covariates = c("region_lab"), spline_catchability_covariates = NULL,
                                      spline_spatial_covariates = "spline_var", trace_level = "high")
 
 simple_spatial_model$obj$fn()
@@ -195,7 +202,7 @@ contrast_region = glm_coefs[grepl(names(glm_coefs), pattern = "region")]
 reg_coefs = c(glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")], glm_coefs[grepl(names(glm_coefs), pattern = "Intercept")] + contrast_region)
 # transform so comparible to zero sum coeffecients
 comparible_coefs = rbind(reg_coefs - mean(reg_coefs)
-                         ,rep$spatial_betas[1:(length(rep$spatial_betas) - 1)])
+                         ,rep$spatial_betas)
 
 dimnames(comparible_coefs) = list(c("GLM","CPUEspatial"), paste0("region ", 1:4))
 comparible_coefs

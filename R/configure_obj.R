@@ -3,11 +3,11 @@
 #' @details 
 #' given a data frame and some user defined settings will return an TMB object that represents either a GLM, or geo-statistical model.
 #' is implied in this model, otherwise you could just use the standard GLM approach
-#' @param data SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'
-#' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as data. Should supply variable values for all projection cells over all time steps
+#' @param observed_df SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'
+#' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps
 #' @param include_epsilon boolean time-invariant spatial GF
 #' @param include_omega boolean time-varying spatial GF
-#' @param response_variable_label character relating to a column name in data
+#' @param response_variable_label character relating to a column name in observed_df
 #' @param time_variable_label character relating to a column names needs to be an integer variable 
 #' @param catchability_covariates string vector of column labels corresponding for catchability realted covariates, if type not numeric it is treated as categorical
 #' @param spatial_covariates string vector of column labels corresponding for spatial habitat realted covariates, if type not numeric it is treated as categorical
@@ -20,7 +20,7 @@
 #' @param apply_preferential_sampling whether to jointly model observation location 
 #' @param preference_model_type integer 0 = Dinsdale approach, 1 = LGCP lattice approach
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
-#' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The data slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
+#' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 #' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
 #' @importFrom sp coordinates
@@ -32,15 +32,14 @@
 #' @importFrom raster raster rasterize crs
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
-configure_obj = function(data, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
+configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
                          spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, projection_raster_layer = NULL, trace_level = "none") {
   Call = list()
   Call$func_call <- match.call()
-  e1 <- parent.frame() ## found this is needed for the evalit function
   if(!trace_level %in% c("none", "low", "medium","high"))
     stop(paste0("trace_level needs to be 'none', 'low', 'medium','high'"))
-  if(class(data) != "SpatialPointsDataFrame")
-    stop(paste0("data needs to be of class SpatialPointsDataFrame, see the example for more information, can be converted by using coordinates(data) <- ~ x + y"))
+  if(class(observed_df) != "SpatialPointsDataFrame")
+    stop(paste0("observed_df needs to be of class SpatialPointsDataFrame, see the example for more information, can be converted by using coordinates(observed_df) <- ~ x + y"))
   if(class(projection_df) != "SpatialPointsDataFrame")
     stop(paste0("projection_df needs to be of class SpatialPointsDataFrame, see the example for more information, can be converted by using coordinates(projection_df) <- ~ x + y"))
   if(class(mesh) != "inla.mesh")
@@ -59,13 +58,13 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(family == 1 & link != 1)
     stop("Currently binomial family is only parameterised for link = logit.")
   # check projections are the same.
-  #if(is.na(attr(crs(projection_df), "projargs") != attr(crs(data), "projargs")) attr(crs(projection_df), "projargs") != attr(crs(data), "projargs"))
-  #  stop(paste0("projection_df and data need to have the same crs projection system, please check raster::crs() for both these objects"))
+  #if(is.na(attr(crs(projection_df), "projargs") != attr(crs(observed_df), "projargs")) attr(crs(projection_df), "projargs") != attr(crs(observed_df), "projargs"))
+  #  stop(paste0("projection_df and observed_df need to have the same crs projection system, please check raster::crs() for both these objects"))
 
   catchability_covariate_type = NULL
   if(length(catchability_covariates) > 0) {
     for(i in 1:length(catchability_covariates)) {
-      this_type = class(data@data[, catchability_covariates[i]])
+      this_type = class(observed_df@data[, catchability_covariates[i]])
       catchability_covariate_type = c(catchability_covariate_type, this_type)
     }
   }
@@ -73,7 +72,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   spatial_covariate_type = NULL
   if(length(spatial_covariates) > 0) {
     for(i in 1:length(spatial_covariates)) {
-      this_type = class(data@data[, spatial_covariates[i]])
+      this_type = class(observed_df@data[, spatial_covariates[i]])
       if(this_type == "integer")
         stop(paste0("currently the variable ", spatial_covariates[i], " is of type integer. Change this to either a factor or numeric so this function can correctly configure the model"))
       spatial_covariate_type = c(spatial_covariate_type, this_type)
@@ -84,8 +83,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   # get response variable
   if(!all(proj_vars_needed %in% colnames(projection_df@data))) 
     stop(paste0("projection_df: needs colnames ", paste(proj_vars_needed, collapse = ", ")))
-  if(!all(vars_needed %in% colnames(data@data)))
-    stop(paste0("data: needs colnames ", paste(vars_needed, collapse = ", ")))
+  if(!all(vars_needed %in% colnames(observed_df@data)))
+    stop(paste0("observed_df: needs colnames ", paste(vars_needed, collapse = ", ")))
   
   if(length(catchability_covariates) != length(catchability_covariate_type)) 
     stop(paste0("catchability_covariates needs to be the same length as catchability_covariate_type"))
@@ -93,9 +92,9 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     stop(paste0("spatial_covariates needs to be the same length as spatial_covariate_type"))
   
   # time step 
-  time_variable = data@data[,time_variable_label]
+  time_variable = observed_df@data[,time_variable_label]
   if(class(time_variable) != "integer") 
-    stop(paste0("time_variable_name needs to be an integer this can be achieved by as.integer(data@data$", time_variable_label,")"))
+    stop(paste0("time_variable_name needs to be an integer this can be achieved by as.integer(observed_df@data$", time_variable_label,")"))
   
   time_levels = sort(unique(time_variable))
   
@@ -106,18 +105,18 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     print(paste0("Passed initial input checks"))
   
   ## map mesh to observations
-  A = inla.spde.make.A(mesh, loc = cbind(coordinates(data[, 1]), coordinates(data[, 2])))
+  A = inla.spde.make.A(mesh, loc = cbind(coordinates(observed_df[, 1]), coordinates(observed_df[, 2])))
   ## Create Sparse Matern objects to pass to TMB
   spde = inla.spde2.matern(mesh, alpha = 2)
   ## get some index
   n_t = length(unique(time_variable))
   # number of vertices ie. random effects for each GF
   n_v = mesh$n
-  n = nrow(data)
+  n = nrow(observed_df)
   
   ## model matrix for linear effects
   ff = paste0(response_variable_label," ~ 0 + factor(",time_variable_label,")")
-  m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
+  m <- model.frame(formula(ff), observed_df@data, drop.unused.levels = T)
   time_model_matrix <- model.matrix(formula(ff), data = m)
   Call$time = ff
   if(trace_level != "none")
@@ -127,7 +126,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(length(catchability_covariates) != 0) {
     ff = paste0(response_variable_label," ~ ",paste(catchability_covariates, collapse = " + "))
     Call$catchability = ff
-    m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
+    m <- model.frame(formula(ff), observed_df@data, drop.unused.levels = T)
     model_matrix <- model.matrix(formula(ff), m)
   }
   
@@ -141,7 +140,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   if(length(spatial_covariates) != 0) {
     ff = paste0(response_variable_label," ~ 0 +",paste(spatial_covariates, collapse = " + "))
     Call$spatial = ff
-    m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
+    m <- model.frame(formula(ff), observed_df@data, drop.unused.levels = T)
     data_spatial_model_matrix <- model.matrix(formula(ff), m)
     p_s = max(attributes(data_spatial_model_matrix)$assign) # should be the same length as spatial covariate
     if(attributes(data_spatial_model_matrix)$dim[2] == 1) {
@@ -165,6 +164,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
       }
     }
   }
+  if(trace_level != "none")
+    print(paste0("Configured spatial coeffecients"))
   ## model matrix for spline covariates
   ## Spline based stuff
   spline_ <- NULL
@@ -175,7 +176,8 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   S_spatial_list <- list()
   S_spatial_reporting_list <- list()
   if(length(spline_catchability_covariates) > 0) {
-    spline_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"), e1)
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + ")))
+    spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     #attach(spline_)
     if(trace_level == "high") {
       print(paste0("length spline = ", length( spline_$smooth)))
@@ -184,7 +186,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     
     for(i in 1:length(spline_$smooth)) {
       S_null <- spline_$smooth[[i]]$S[[1]]
-      for_plotting <- data.frame("temp_name" = seq(min(data@data[,spline_catchability_covariates[i]]),max(data@data[,spline_catchability_covariates[i]]),by = diff(range(data@data[,spline_catchability_covariates[i]])) / 50));
+      for_plotting <- data.frame("temp_name" = seq(min(observed_df@data[,spline_catchability_covariates[i]]),max(observed_df@data[,spline_catchability_covariates[i]]),by = diff(range(observed_df@data[,spline_catchability_covariates[i]])) / 50));
       colnames(for_plotting) = spline_catchability_covariates[i]
       forReport <- mgcv::PredictMat(spline_$smooth[[i]], data = for_plotting)
       S_catchability_list[[i]] <- S_null
@@ -192,11 +194,12 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     }
   } else {
     ## create a dummy variable
-    spline_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ s(area, bs = 'cs'), data = data@data, fit = F)"), e1)
+    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
+    spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline = ", length( spline_$smooth)))
     S_null <- spline_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(data@data[,"area"]),max(data@data[,"area"]),by = diff(range(data@data[,"area"])) / 50)
+    for_plotting <- seq(min(observed_df@data[,"area"]),max(observed_df@data[,"area"]),by = diff(range(observed_df@data[,"area"])) / 50)
     forReport <- mgcv::PredictMat(spline_$smooth[[1]], data = data.frame(area = for_plotting))
     S_catchability_list[[1]] <- S_null
     S_catchability_reporting_list[[1]] <- forReport
@@ -206,14 +209,15 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     print(paste0("Passed catchability spline section"))
   
   if(length(spline_spatial_covariates) > 0) {
-    spline_spatial_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + "),", data = data@data, fit = F)"), e1)
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
+    spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high") {
       print(paste0("formula = mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     }
     for(i in 1:length(spline_spatial_$smooth)) {
       S_null <- spline_spatial_$smooth[[i]]$S[[1]]
-      for_plotting <- data.frame("temp_name" = seq(min(data@data[,spline_spatial_covariates[i]]),max(data@data[,spline_spatial_covariates[i]]),by = diff(range(data@data[,spline_spatial_covariates[i]])) / 50));
+      for_plotting <- data.frame("temp_name" = seq(min(observed_df@data[,spline_spatial_covariates[i]]),max(observed_df@data[,spline_spatial_covariates[i]]),by = diff(range(observed_df@data[,spline_spatial_covariates[i]])) / 50));
       colnames(for_plotting) = spline_spatial_covariates[i]
       forReport <- mgcv::PredictMat(spline_spatial_$smooth[[i]], data = for_plotting)
       S_spatial_list[[i]] <- S_null
@@ -221,12 +225,13 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
     }
   } else {
     ## create a dummy variable
-    spline_spatial_ <- evalit(paste0("mgcv::gam(",response_variable_label," ~ s(area, bs = 'cs'), data = data@data, fit = F)"), e1)
+    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
+    spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     
     S_null <- spline_spatial_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(data@data[,"area"]),max(data@data[,"area"]),by = diff(range(data@data[,"area"])) / 50)
+    for_plotting <- seq(min(observed_df@data[,"area"]),max(observed_df@data[,"area"]),by = diff(range(observed_df@data[,"area"])) / 50)
     forReport <- mgcv::PredictMat(spline_spatial_$smooth[[1]], data = data.frame(area = for_plotting))
     S_spatial_list[[1]] <- S_null
     S_spatial_reporting_list[[1]] <- forReport
@@ -267,7 +272,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   Proj_area = proj_df_subset@data$area
   
   proj_vertex_ndx = nn2(mesh$loc[,c(1,2)], coordinates(proj_df_subset), k = 1)$nn.idx
-  data_vertex_ndx = nn2(mesh$loc[,c(1,2)], coordinates(data), k = 1)$nn.idx
+  data_vertex_ndx = nn2(mesh$loc[,c(1,2)], coordinates(observed_df), k = 1)$nn.idx
   
   
   if(trace_level != "none")
@@ -275,7 +280,7 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
   
   for(t in 1:n_t) {
     proj_df_subset <- subset(projection_df@data, subset = projection_df@data[,time_variable_label] == time_levels[t])
-    data_df_subset <- subset(data, subset = data@data[,time_variable_label] == time_levels[t])
+    data_df_subset <- subset(observed_df, subset = observed_df@data[,time_variable_label] == time_levels[t])
     data_df_subset@data$indicator = 1
     # validate binning
     #plot(proj_count)
@@ -297,15 +302,15 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
       ##  build data spatial model matrix
       #data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
       ff = paste0(response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "))
-      m <- model.frame(formula(ff), data@data, drop.unused.levels = T)
+      m <- model.frame(formula(ff), observed_df@data, drop.unused.levels = T)
       data_spatial_model_matrix <- model.matrix(formula(ff), m)
       
       ##  build projection spatial model matrix
-      ff <- evalit(paste0(response_variable_label," ~ 0 + ", paste(spatial_covariates, collapse = " + ")), e1)
-      m <- model.frame(ff, proj_df_subset, drop.unused.levels = T)
-      proj_spatial_model_matrix <- model.matrix(ff, m)
+      ff <- paste0(response_variable_label," ~ 0 + ", paste(spatial_covariates, collapse = " + "))
+      m <- model.frame(formula(ff), proj_df_subset, drop.unused.levels = T)
+      proj_spatial_model_matrix <- model.matrix(formula(ff), m)
       if(ncol(proj_spatial_model_matrix) != ncol(data_spatial_model_matrix))
-        stop("when building model matrix for spatial_covariates. The columns of projection model matrix differed from the columns of data model matrix. This can happen when there are levels in one data set that are not in the other. you might want to investigate these covariates.")
+        stop("when building model matrix for spatial_covariates. The columns of projection model matrix differed from the columns of observed_df model matrix. This can happen when there are levels in one data set that are not in the other. you might want to investigate these covariates.")
       X_spatial_proj_zpt[,,t] <- proj_spatial_model_matrix
       X_spatial_ipt[,,t] <- data_spatial_model_matrix
     }
@@ -327,9 +332,9 @@ configure_obj = function(data, projection_df, mesh, family, link, include_omega,
                model = "SpatialTemporalCPUE",
                n_i = n,
                n_t = n_t,
-               y_i = data@data[,response_variable_label],
+               y_i = observed_df@data[,response_variable_label],
                t_i = time_variable - min(time_variable), # index for C++ language could be 1990 1991 etc,
-               area_i = data@data$area,
+               area_i = observed_df@data$area,
                obs_t = as.numeric(table(time_variable)),
                A = A,
                spde = spde$param.inla[c("M0","M1","M2")],

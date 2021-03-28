@@ -354,6 +354,20 @@ myInfl_cpue = calculate_influence(non_spatial, data2use2_utm)
 myInfl$summary$overall
 myInfl_cpue$overall_influence
 
+plot_influence(myInfl_cpue, "fish_month")
+myInfl$cdiPlot('fish_month')
+
+plot_influence(myInfl_cpue, "target_species")
+myInfl$cdiPlot('target_species')
+
+plot_influence(myInfl_cpue, "vessel_key")
+myInfl$cdiPlot('vessel_key')
+
+plot_influence(myInfl_cpue, "start_stats_area_code")
+myInfl$cdiPlot('start_stats_area_code')
+
+
+
 tab = kable(myInfl$summary,
             row.names = FALSE,
             caption = "Influence metrics.",
@@ -370,7 +384,6 @@ print(tab) # copy this into the latex document
 myInfl$stanPlot()
 #dev.off()
 
-myInfl$cdiPlot('fish_month')
 
 
 labs = names(sd_rep$value)
