@@ -151,7 +151,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
         this_eta = this_eta + spline_$X[,-1] %*% this_rep$gammas 
       if(conf_obj$tmb_data$omega_indicator) {
         if(linear_basis == 0) {
-          this_eta = this_eta + A %*% this_rep$omega_input
+          this_eta = this_eta + A %*% this_rep$omega_input / this_rep$tau_omega
         } else {
           this_eta = this_eta + this_rep$omega_input[data_vertex_ndx]
         }
@@ -160,7 +160,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
         for(t in 1:ncol(this_rep$epsilon_input)) {
           this_eps = NULL
           if(linear_basis == 0) {
-            this_eps = A %*% this_rep$epsilon_input[,t]
+            this_eps = A %*% this_rep$epsilon_input[,t] / this_rep$tau_epsilon
           } else {
             this_eps = this_rep$epsilon_input[data_vertex_ndx, t]
           }
@@ -185,7 +185,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
       this_eta = this_eta + spline_$X[,-1] %*% this_rep$gammas 
     if(conf_obj$tmb_data$omega_indicator) {
       if(linear_basis == 0) {
-        this_eta = this_eta + A %*% this_rep$omega_input
+        this_eta = this_eta + A %*% this_rep$omega_input / this_rep$tau_omega
       } else {
         this_eta = this_eta + this_rep$omega_input[data_vertex_ndx]
       }
@@ -194,7 +194,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
       for(t in 1:ncol(this_rep$epsilon_input)) {
         this_eps = NULL
         if(linear_basis == 0) {
-          this_eps = A %*% this_rep$epsilon_input[,t]
+          this_eps = A %*% this_rep$epsilon_input[,t] / this_rep$tau_epsilon
         } else {
           this_eps = this_rep$epsilon_input[data_vertex_ndx, t]
         }
