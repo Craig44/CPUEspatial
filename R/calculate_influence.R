@@ -13,7 +13,7 @@
 calculate_influence = function(conf_obj, data_df) {
   ## do some checks and balances
   if(!conf_obj$tmb_data$link %in% c(0))
-    warning("This is functionality is made for multiplicative models. Usually associated with log-link models, could be the identity link if you have logged the response variable previously.")
+    warning("This is functionality is made for multiplicative models. Usually associated with log-link models, could be the identity link if you have logged the response variable previously. See the original Bentley 2011 paper for more information")
   
   ## get standard errors
   sd_rep = sdreport(conf_obj$obj)

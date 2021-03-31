@@ -12,6 +12,31 @@ evalit = function (x, ...)  {
   eval(parse(text = x), ...)
 }
 
+#' check_dims
+#' @details check a dimension is consistent between two matricies
+#' @param m1 a matrix
+#' @param m2 a matrix
+#' @param row boolean check row if false check columns
+#' @keywords internal
+#' 
+#' @return list with bool and message
+check_dims = function (m1, m2, row)  {
+  passed_check = TRUE
+  msg = "success"
+  if(row) {
+    if(nrow(m1) != nrow(m2)) {
+      passed_check = FALSE
+      msg = paste0("the first matrix had '", nrow(m1), "' rows and the second had, '", nrow(m2), "'.")
+    } 
+  } else {
+    if(ncol(m1) != ncol(m2)) {
+      passed_check = FALSE
+      msg = paste0("the first matrix had '", ncol(m1), "' columns and the second had, '", ncol(m2), "'.")
+    } 
+  }
+  return(list(passed_check = passed_check, msg = msg))
+}
+
 #' check_gradients
 #' @details checks a TMB object for fixed effect parameters that have 0 gradients, suggesting they don't contribute the log likelihood. And you should 
 #' look into these parameters.
