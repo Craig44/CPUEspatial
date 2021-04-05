@@ -7,13 +7,13 @@
 get_projection(obj, data, projection_df, time_variable_label)
 }
 \arguments{
-\item{obj}{TMB object which has been optimised and checkef that it successfully converged}
+\item{obj}{TMB object which has been optimised and checked for convergence}
 
-\item{data}{number of simulated data sets}
+\item{data}{the tmb_data element that is returned from configure_obj() function}
 
-\item{projection_df}{spatial data frame}
+\item{projection_df}{spatial data frame, should be the same one given to configure_obj()}
 
-\item{time_variable_label}{character of}
+\item{time_variable_label}{character}
 }
 \value{
 : projection_df with a column called predicted_y which has all the spatial components plus the time_coeffecient
@@ -22,5 +22,5 @@ get_projection(obj, data, projection_df, time_variable_label)
 get_projection
 }
 \details{
-
+used to get the projected fitted values from a given model.
 }

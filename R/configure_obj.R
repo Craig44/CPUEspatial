@@ -302,12 +302,12 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
       ##  build data spatial model matrix
       #data_spatial_model_matrix <- evalit(paste0("model.matrix(",response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "),",  data = data@data)"), e1)
       ff = paste0(response_variable_label," ~ 0 + ",paste(spatial_covariates, collapse = " + "))
-      m <- model.frame(formula(ff), observed_df@data, drop.unused.levels = T)
+      m <- model.frame(formula(ff), observed_df@data, drop.unused.levels = F)
       data_spatial_model_matrix <- model.matrix(formula(ff), m)
       
       ##  build projection spatial model matrix
       ff <- paste0(response_variable_label," ~ 0 + ", paste(spatial_covariates, collapse = " + "))
-      m <- model.frame(formula(ff), proj_df_subset, drop.unused.levels = T)
+      m <- model.frame(formula(ff), proj_df_subset, drop.unused.levels = F)
       proj_spatial_model_matrix <- model.matrix(formula(ff), m)
       if(ncol(proj_spatial_model_matrix) != ncol(data_spatial_model_matrix))
         stop("when building model matrix for spatial_covariates. The columns of projection model matrix differed from the columns of observed_df model matrix. This can happen when there are levels in one data set that are not in the other. you might want to investigate these covariates.")

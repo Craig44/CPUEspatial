@@ -1,11 +1,11 @@
 #' get_projection
 #' 
-#' @details 
+#' @details used to get the projected fitted values from a given model.
 #' 
-#' @param obj TMB object which has been optimised and checkef that it successfully converged
-#' @param data number of simulated data sets 
-#' @param projection_df spatial data frame
-#' @param time_variable_label character of
+#' @param obj TMB object which has been optimised and checked for convergence
+#' @param data the tmb_data element that is returned from configure_obj() function
+#' @param projection_df spatial data frame, should be the same one given to configure_obj()
+#' @param time_variable_label character
 #' @export
 #' @return: projection_df with a column called predicted_y which has all the spatial components plus the time_coeffecient
 get_projection <- function(obj, data, projection_df, time_variable_label) {
