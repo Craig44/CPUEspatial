@@ -359,8 +359,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   
   // Time-serie
-  //Type gmean = Gmean(relative_index);
-  //vector<Type> standardised_index = relative_index / Gmean(relative_index);
+  Type gmean = Gmean(relative_index);
+  vector<Type> standardised_index = relative_index / Gmean(relative_index);
   //for(i = 0; i < nll.size(); ++i)
   //std::cout << nll(i) << " ";
   //std::cout << std::endl;
@@ -427,8 +427,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( betas_w_intercept );
   
   
-  //ADREPORT( relative_index );
-  //ADREPORT( standardised_index );
+  ADREPORT( relative_index );
+  ADREPORT( standardised_index );
   
   return nll.sum();
 }

@@ -129,7 +129,7 @@ Goodness of fit, can be tricky for mixed effect models. The method that we have 
 
 
 ### Gaussian Field interpolation {-}
-CPUE analysis can involve large data-sets. When dealing with large data-sets geostatistical models can run into memory issues. i.e the following error 
+CPUE analysis can involve large data-sets. When dealing with large data-sets geostatistical models can run into memory issues. i.e the following error `Memory allocation fail in function 'MakeADGradObject'`
 
 
 There are a few options in the package to address this issue. The first relates to the basis functions for extrapolating the vertex points over the spatial domain (Equation~\ref{eq:basis}). There are two options, which are defined in the function `configure_obj()` with the input parameter `linear_basis`. When `linear_basis = 0` Equation~\ref{eq:basis} is applied where a weight for each vertex for a point wihtin a given triangulation is applied. This is done with sparse matrix operations i.e. if there are \(n_k\) verticies, rows will only contain \(n_k - 3\) possible nonzero entries. Although should be quick, becuase of the sparse matrix applications, can be memory intensive. 

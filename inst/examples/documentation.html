@@ -267,9 +267,17 @@ I_t = \sum\limits_{s = 1}^{n_s} a_s g^{-1}\left(\beta^t_t + \boldsymbol{\tilde{X
 </div>
 <div id="configuration" class="section level2">
 <h2>Configuration</h2>
+<div id="r-functions" class="section level3">
+<h3>R functions</h3>
+The main function for creating the TMB object is <code>configure_obj()</code> for information on parameters type <code>?configure_obj()</code>. This requires spatial data frame for observations and spatial data frame for a projected region of interest for each time-step. <code>configure_obj</code> function will return a list containing three objects names
+
+<p>The important</p>
+<p>To create spatial plots you can use the <code>get_projection()</code> to extract the spatial distribution for each time-step. This will append a column named <code>predicted_y</code> which you can use with ggplot to create pretty pictures.</p>
+<p>Goodness of fit, can be tricky for mixed effect models. The method that we have suggest is to go with predictive approach applied in the <code>DHARMa</code> R package. Users can use the <code>simulate_data()</code> function to generate predictive distributions. Which can easily be feed into the <code>DHARMa</code> package.</p>
+</div>
 <div id="gaussian-field-interpolation" class="section level3 unnumbered">
 <h3>Gaussian Field interpolation</h3>
-<p>CPUE analysis can involve large data-sets. When dealing with large data-sets geostatistical models can run into memory issues. i.e the following error</p>
+<p>CPUE analysis can involve large data-sets. When dealing with large data-sets geostatistical models can run into memory issues. i.e the following error <code>Memory allocation fail in function 'MakeADGradObject'</code></p>
 <p>There are a few options in the package to address this issue. The first relates to the basis functions for extrapolating the vertex points over the spatial domain (Equation~). There are two options, which are defined in the function <code>configure_obj()</code> with the input parameter <code>linear_basis</code>. When <code>linear_basis = 0</code> Equation~ is applied where a weight for each vertex for a point wihtin a given triangulation is applied. This is done with sparse matrix operations i.e. if there are <span class="math inline">\(n_k\)</span> verticies, rows will only contain <span class="math inline">\(n_k - 3\)</span> possible nonzero entries. Although should be quick, becuase of the sparse matrix applications, can be memory intensive.</p>
 <p>The second approach <code>linear_basis = 1</code> uses the nearest neighbour approach. Where any location over the spatial domain is assigned the vertex value based on the shortest distance. This will create more of a discrete field. I am unsure on the computational benefits from this approach, but is definitley less memory intensive. This follows the approach used in VAST.</p>
 </div>
@@ -302,6 +310,10 @@ The denisty is
 <p>The common approach for Cox models, is to create a fine lattice over the observation window <span class="math inline">\((\Omega)\)</span> and then model the number of points in cell <span class="math inline">\(s_{ij}\)</span> (<span class="math inline">\(N_{ij}\)</span> ) of the lattice. <span class="math inline">\(N_{ij} \sim Po(\Lambda_{ij})\)</span> where, <span class="math inline">\(\Lambda_{ij} = \int_{s_{ij}}\lambda(s)ds\)</span>. Again back to an intractable integral so the approximated is made where, <span class="math inline">\(\Lambda_{ij} \approx |s_{ij}|exp(z_{ij})\)</span>, where <span class="math inline">\(z_{ij}\)</span> is a representative value of <span class="math inline">\(Z(s)\)</span> and <span class="math inline">\(|s_{ij}\)</span> is the area of the cell. An alternative approach is to use the dual mesh from the Simpson et.al. 2016 paper (I ran into issues with this approach).</p>
 </div>
 </div>
+</div>
+<div id="goodness-of-fit-metrics" class="section level2">
+<h2>Goodness of Fit metrics</h2>
+<p>The approaches in this package is a predictive based appraoch using DHARMa R package</p>
 </div>
 
 
