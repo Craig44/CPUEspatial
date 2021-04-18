@@ -1,6 +1,8 @@
 /*
- * The idea is it follows, something like https://github.com/pconn/pref_sampling/blob/master/pref_sampling/src/PrefSampling.cpp
- * 
+ * A unvariate GLMM with forced time dimension, spatial dimension is optional. FOr the purpose of extracting index of abundance,
+ * Can account for Preferential sampling when a spatial GF is specified. Differs from SpatialTemporalCPUENN, in the basis functions
+ * used to interpolate with in the triangulations. This uses linear basis from all three neighbouring triangles, The other does a nearest neightbour
+ * approach.
  */
 #ifndef SpatialTemporalCPUE_hpp
 #define SpatialTemporalCPUE_hpp
@@ -93,7 +95,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // nuisance parameters
   PARAMETER(ln_phi);                            // variance/dispersion parameter for y_dist turn off for distributions such as Poisson.
   // Preference Model
-  PARAMETER(logit_pref_coef);                   // preferential parameter logistic transformation
+  PARAMETER_VECTOR(logit_pref_coef);            // preferential parameter logistic transformation
   PARAMETER(lgcp_intercept);                    // intercept for the Log-Gaussian Cox Process Point process 
   // GMRF 
   PARAMETER( ln_kappa_omega );                  // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
@@ -116,7 +118,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ///////////////////////////
   int i, t, j, k, obs_ndx;
   int n_p = Proj_Area.size();
-  
+  int n_t = constrained_time_betas.size() + 1;
   // un constrain spatial and catcspatialility coeffecients
   vector<Type> spatial_betas(X_spatial_ipt.col(0).cols());
   spatial_betas.setZero();
@@ -151,13 +153,22 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     }
   }
   
-  vector<Type> time_betas(constrained_time_betas.size() + 1);
+  vector<Type> time_betas(n_t);
   for(i = 0; i < constrained_time_betas.size(); ++i) 
     time_betas(i) = constrained_time_betas(i);
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
+  
+  vector<type> pref_coef(n_t);
+  if(logit_pref_coef.size() == 1) {
+    for(t = 0; t < n_t; ++t)
+      pref_coef(t) = invlogit_general(logit_pref_coef(0), pref_coef_bounds(0), pref_coef_bounds(1));
+  } else {
+    for(t = 0; t < n_t; ++t)
+      pref_coef(t) = invlogit_general(logit_pref_coef(t), pref_coef_bounds(0), pref_coef_bounds(1));
+  }
+    
   Type phi = exp(ln_phi); 
-  Type pref_coef = invlogit_general(logit_pref_coef, pref_coef_bounds(0), pref_coef_bounds(1));
   Type eps_rho = invlogit_general(logit_eps_rho, Type(-0.99), Type(0.99));
   Type kappa_omega = exp(ln_kappa_omega);
   Type tau_omega = exp(ln_tau_omega);
@@ -345,14 +356,14 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     relative_index(t) = (Proj_Area * exp(time_betas(t) + spatial_proj)).sum();
     
     if(LCGP_approach == 0) 
-      pref_denom(t) = log((Proj_Area * exp(pref_coef * spatial_proj)).sum()); 
+      pref_denom(t) = log((Proj_Area * exp(pref_coef(t) * spatial_proj)).sum()); 
     // deal with Pr(S | W, X) Observations
     if(apply_pref == 1) {
       if(LCGP_approach == 0) {
-        nll(3) -=  pref_coef * pref_numerator(t) - obs_t(t) * pref_denom(t);
+        nll(3) -=  pref_coef(t) * pref_numerator(t) - obs_t(t) * pref_denom(t);
       } else if(LCGP_approach == 1) {
         for(i = 0;i < n_p; ++i)
-          nll(3) -= dpois(Nij(i, t), Proj_Area(i) * exp(lgcp_intercept + pref_coef * spatial_proj(i)), true); 
+          nll(3) -= dpois(Nij(i, t), Proj_Area(i) * exp(lgcp_intercept + pref_coef(t) * spatial_proj(i)), true); 
       }
     }
   }
