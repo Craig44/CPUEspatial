@@ -83,4 +83,5 @@ pref_hyper_distribution integer specifies whether preference coeffecient (the lo
  == 1: mu_pref (est) & sd_pref (est), 
  == 2: mu_pref (fixed)  & sd_pref(fixed)
  == 3: mu_pref (est)  & sd_pref(fixed)
+ == 4: mu_pref (fixed)  & sd_pref(est)
 }

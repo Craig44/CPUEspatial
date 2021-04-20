@@ -78,18 +78,23 @@ test_that("config_with_pref", {
                                       spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                       spline_spatial_covariates = NULL, apply_preferential_sampling = TRUE, preference_model_type = 0, pref_hyper_distribution = 1,
                                       logit_pref_hyper_prior_vals = c(0,0.5), trace_level = "none")  
+  table(names(eps_model_time_vary$obj$env$last.par.best))
+  table(names(eps_model_time_vary$obj$par))
   
   eps_model_time_vary_2 = configure_obj(observed_df = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = F, include_epsilon = T, 
                                       response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, 
                                       spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                       spline_spatial_covariates = NULL, apply_preferential_sampling = TRUE, preference_model_type = 0, pref_hyper_distribution = 2,
-                                      logit_pref_hyper_prior_vals = c(0,0.5), trace_level = "high")  
+                                      logit_pref_hyper_prior_vals = c(0,0.5), trace_level = "none")  
+  table(names(eps_model_time_vary_2$obj$env$last.par.best))
+  table(names(eps_model_time_vary_2$obj$par))
   eps_model_time_vary_3 = configure_obj(observed_df = data, projection_df = projection_df, mesh = mesh, family = 3, link = 0, include_omega = F, include_epsilon = T, 
                                       response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = NULL, 
                                       spatial_covariates = NULL,  spline_catchability_covariates = NULL,
                                       spline_spatial_covariates = NULL, apply_preferential_sampling = TRUE, preference_model_type = 0, pref_hyper_distribution = 3,
                                       logit_pref_hyper_prior_vals = c(0,0.5), trace_level = "none")  
-  
+  table(names(eps_model_time_vary_3$obj$env$last.par.best))
+  table(names(eps_model_time_vary_3$obj$par))
   
   
   ## validate by looking at log likelihood is value

@@ -8,7 +8,8 @@
 #'  == 1: mu_pref (est) & sd_pref (est), 
 #'  == 2: mu_pref (fixed)  & sd_pref(fixed)
 #'  == 3: mu_pref (est)  & sd_pref(fixed)
-#'  
+#'  == 4: mu_pref (fixed)  & sd_pref(est)
+
 #' @param observed_df SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'
 #' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps
 #' @param include_epsilon boolean time-invariant spatial GF
@@ -404,7 +405,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     constrained_spatial_betas = rep(0, max(tmb_data$spatial_constrained_coeff_ndx) + 1),
     constrained_time_betas = rep(0, max(dim(tmb_data$time_model_matrix)[2] - 1,1)),
     ln_phi = 0,
-    logit_pref_coef = ifelse(pref_hyper_distribution == 0, logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)),
+    logit_pref_coef = logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]),
     logit_pref_hyper_params = c(logit_pref_hyper_prior_vals[1], log(logit_pref_hyper_prior_vals[2])),
     lgcp_intercept = 0,
     ln_kappa_omega = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
@@ -419,6 +420,9 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     gammas_spatial = rep(0,sum(tmb_data$Sdims_spatial)),  # Spline coefficients
     ln_lambda_spatial = rep(0,length(tmb_data$Sdims_spatial)) #Log spline penalization coefficients
   )
+  if(pref_hyper_distribution != 0)
+    params$logit_pref_coef =  rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)
+  
   
   if(trace_level != "none")
     print(paste0("Passed: TMB parameter list construction"))
@@ -450,12 +454,18 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     if(preference_model_type == 0)
       pars_to_fix = c(pars_to_fix, "lgcp_intercept")
     if(pref_hyper_distribution == 0) {
+      # not time-varying
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
     } else if(pref_hyper_distribution == 2) {
+      ## both fixed
+      pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
+    } else if (pref_hyper_distribution == 3) {
+      ## estimate hyper mean
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
       vec_pars_to_adjust = c(vec_pars_to_adjust,"logit_pref_hyper_params")
       vec_elements_to_exclude = list(logit_pref_hyper_params = c(1))
-    } else if(pref_hyper_distribution == 3) {
+    } else if(pref_hyper_distribution == 4) {
+      ## estimate hyper sd
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
       vec_pars_to_adjust = c(vec_pars_to_adjust,"logit_pref_hyper_params")
       vec_elements_to_exclude = list(logit_pref_hyper_params = c(2))
@@ -463,6 +473,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   } else {
     pars_to_fix = c(pars_to_fix, "logit_pref_coef","lgcp_intercept", "logit_pref_hyper_params")
   }
+  
   
   fixed_pars = list()
   if(length(pars_to_fix) > 0)
@@ -481,7 +492,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     random_pars = c(random_pars, "epsilon_input")
   if(include_omega)
     random_pars = c(random_pars, "omega_input")
-  if(apply_preferential_sampling & preference_model_type != 0)
+  if(apply_preferential_sampling & pref_hyper_distribution != 0)
     random_pars = c(random_pars, "logit_pref_coef")
   
   obj <- MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
