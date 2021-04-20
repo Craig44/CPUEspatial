@@ -21,6 +21,8 @@ configure_obj(
   linear_basis = 0,
   apply_preferential_sampling = FALSE,
   preference_model_type = 1,
+  pref_hyper_distribution = 0,
+  logit_pref_hyper_prior_vals = c(0, 1),
   projection_raster_layer = NULL,
   trace_level = "none"
 )
@@ -58,6 +60,10 @@ configure_obj(
 
 \item{preference_model_type}{integer 0 = Dinsdale approach, 1 = LGCP lattice approach}
 
+\item{pref_hyper_distribution}{integer #specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref = N(mu_pref, sd_pref). See details for more information}
+
+\item{logit_pref_hyper_prior_vals}{vector<double> specifing the mean and sd (note sd is estimated interanlly as ln_sd to constrain sd > 0, so this value is logged in the model). if estimated as specified by pref_hyper_distribution, these are the starting values, otherwise they are the values fixed during estimation}
+
 \item{projection_raster_layer}{a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 TODO add whether we want to use Nearest Neighbour approach NN.}
 
@@ -71,5 +77,10 @@ configure_obj
 }
 \details{
 given a data frame and some user defined settings will return an TMB object that represents either a GLM, or geo-statistical model.
-is implied in this model, otherwise you could just use the standard GLM approach
+is implied in this model, otherwise you could just use the standard GLM approach. 
+pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, cv_pref), 
+ == 0: Not time-varying
+ == 1: mu_pref (est) & sd_pref (est), 
+ == 2: mu_pref (fixed)  & sd_pref(fixed)
+ == 3: mu_pref (est)  & sd_pref(fixed)
 }

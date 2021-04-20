@@ -157,11 +157,12 @@ check_tmb_convergence = function(obj, delta = 0.001) {
   
 #' TMB helper function
 #' @author C.Marsh
-#' @details this function returns a list of factors used in the map argument of the MakeADFun function
+#' @date 5/9/2018
+#' @description this function returns a list of factors used in the map argument of the MakeADFun function
 #' @param par_list a named list that you give to the par argument in the MakeADFun
 #' @param pars_to_exclude a vector of strings with names of parmeters you want to FIX in the objective object.
 #' @param vec_pars_to_adjust a vector string of parameter labels that we want to exclude certain elements.
-#' @param vec_elements_to_exclude a list with number of elements = length(vec_pars_to_adjust). each list element 
+#' @param vec_elements_to_exclude a named list (names same as par_list) with number of elements = length(vec_pars_to_adjust). each list element 
 #' contains a vector of elements that we want to exclude from estimation.
 #' @export
 #' @return a list of factors used in the MakeADFun function
@@ -182,7 +183,7 @@ fix_pars = function(par_list, pars_to_exclude, vec_pars_to_adjust = NULL, vec_el
     if (pars[i] %in% pars_to_exclude) {
       params_in_this_par = par_list[[pars[i]]];
       if (tailor_vectors & (pars[i] %in% vec_pars_to_adjust)) {
-        include_element_index = c(1:length(params_in_this_par))[-vec_elements_to_exclude]
+        include_element_index = c(1:length(params_in_this_par))[-vec_elements_to_exclude[[which(pars[i] %in% names(vec_elements_to_exclude))]]]
         params_vals = factor(rep(NA, length(params_in_this_par)), levels = factor(param_factor:(param_factor + length(include_element_index) - 1)))
         params_vals[include_element_index] = factor(param_factor:(param_factor + length(include_element_index) - 1))#, levels = factor(include_element_index))
         param_factor = param_factor + length(include_element_index)
@@ -199,7 +200,6 @@ fix_pars = function(par_list, pars_to_exclude, vec_pars_to_adjust = NULL, vec_el
   }
   return(mapped_pars);
 }
-
 #' eigen_decomp_covariance Do an eigen decomposition to look at poorly estimated parameters from MLE fit
 #' @param covariance_matrix symetric covariance matrix
 #' @param param_labels vector of param labels (optional)

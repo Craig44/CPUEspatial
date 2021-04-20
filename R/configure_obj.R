@@ -2,7 +2,13 @@
 #' 
 #' @details 
 #' given a data frame and some user defined settings will return an TMB object that represents either a GLM, or geo-statistical model.
-#' is implied in this model, otherwise you could just use the standard GLM approach
+#' is implied in this model, otherwise you could just use the standard GLM approach. 
+#' pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, cv_pref), 
+#'  == 0: Not time-varying
+#'  == 1: mu_pref (est) & sd_pref (est), 
+#'  == 2: mu_pref (fixed)  & sd_pref(fixed)
+#'  == 3: mu_pref (est)  & sd_pref(fixed)
+#'  
 #' @param observed_df SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'
 #' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps
 #' @param include_epsilon boolean time-invariant spatial GF
@@ -19,6 +25,8 @@
 #' @param linear_basis 0 = apply triangulation sparse matrix approach, 1 = Nearest Neighbour
 #' @param apply_preferential_sampling whether to jointly model observation location 
 #' @param preference_model_type integer 0 = Dinsdale approach, 1 = LGCP lattice approach
+#' @param pref_hyper_distribution integer #specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref = N(mu_pref, sd_pref). See details for more information
+#' @param logit_pref_hyper_prior_vals vector<double> specifing the mean and sd (note sd is estimated interanlly as ln_sd to constrain sd > 0, so this value is logged in the model). if estimated as specified by pref_hyper_distribution, these are the starting values, otherwise they are the values fixed during estimation
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
 #' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 #' TODO add whether we want to use Nearest Neighbour approach NN.
@@ -33,7 +41,7 @@
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
 configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, projection_raster_layer = NULL, trace_level = "none") {
+                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none") {
   Call = list()
   Call$func_call <- match.call()
   if(!trace_level %in% c("none", "low", "medium","high"))
@@ -54,13 +62,13 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
       stop(paste0("If applying preferential sampling with LGCP approach you need to supply projection_raster_layer"))
     set_up_dummy_proj = FALSE
   }
-    
+  
   if(family == 1 & link != 1)
     stop("Currently binomial family is only parameterised for link = logit.")
   # check projections are the same.
   #if(is.na(attr(crs(projection_df), "projargs") != attr(crs(observed_df), "projargs")) attr(crs(projection_df), "projargs") != attr(crs(observed_df), "projargs"))
   #  stop(paste0("projection_df and observed_df need to have the same crs projection system, please check raster::crs() for both these objects"))
-
+  
   catchability_covariate_type = NULL
   if(length(catchability_covariates) > 0) {
     for(i in 1:length(catchability_covariates)) {
@@ -100,7 +108,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   
   if(length(time_levels) < 2) 
     stop(paste0("Need at least two time-steps to run this type of model, found ", length(time_levels)))
-    
+  
   if(trace_level != "none")
     print(paste0("Passed initial input checks"))
   
@@ -204,7 +212,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     S_catchability_list[[1]] <- S_null
     S_catchability_reporting_list[[1]] <- forReport
   }
-
+  
   if(trace_level != "none")
     print(paste0("Passed catchability spline section"))
   
@@ -296,7 +304,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
       
       Nij[,t][is.na(Nij[,t])] = 0
     }
-
+    
     
     if(length(spatial_covariates) > 0) {
       ##  build data spatial model matrix
@@ -329,74 +337,75 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   
   ## Set up TMB object.
   tmb_data <- list(
-               model = "SpatialTemporalCPUE",
-               n_i = n,
-               n_t = n_t,
-               y_i = observed_df@data[,response_variable_label],
-               t_i = time_variable - min(time_variable), # index for C++ language could be 1990 1991 etc,
-               area_i = observed_df@data$area,
-               obs_t = as.numeric(table(time_variable)),
-               A = A,
-               spde = spde$param.inla[c("M0","M1","M2")],
-               Proj = P,
-               Proj_Area = Proj_area,
-               family = family,
-               link = link,
-               pref_coef_bounds = c(-5, 5), ## perhaps make a user input, can be a difficult parameter to estimate
-               Nij = Nij,
-               apply_pref = ifelse(apply_preferential_sampling, 1, 0),
-               LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
-               model_matrix = model_matrix,
-               time_model_matrix = time_model_matrix,
-               X_spatial_ipt = X_spatial_ipt,
-               X_spatial_proj_zpt = X_spatial_proj_zpt,
-               omega_indicator = ifelse(include_omega, 1, 0),
-               epsilon_indicator = ifelse(include_epsilon, 1, 0),
-               spline_flag = c(ifelse(length(spline_catchability_covariates) > 0, 1, 0), ifelse(length(spline_spatial_covariates) > 0, 1, 0)),
-               spline_model_matrix = spline_$X[,-1],
-               spline_spatial_model_matrix_ipt = spline_spatial_model_matrix_ipt,
-               spline_spatial_model_matrix_proj_zpt = spline_spatial_model_matrix_proj_zpt,
-               S = S_catchability_combined,
-               Sdims = S_catchability_dims,
-               designMatrixForReport = S_catchability_design_matrix,
-               S_spatial = S_spatial_combined,
-               Sdims_spatial = S_spatial_dims,
-               designMatrixForReport_spatial = S_spatial_design_matrix,
-               spatial_constrained_coeff_ndx = spatial_constrained_coeff_ndx,
-               spatial_covar_type = spatial_covar_type,
-               simulate_GF = 0
-               
+    model = "SpatialTemporalCPUE",
+    n_i = n,
+    n_t = n_t,
+    y_i = observed_df@data[,response_variable_label],
+    t_i = time_variable - min(time_variable), # index for C++ language could be 1990 1991 etc,
+    area_i = observed_df@data$area,
+    obs_t = as.numeric(table(time_variable)),
+    A = A,
+    spde = spde$param.inla[c("M0","M1","M2")],
+    Proj = P,
+    Proj_Area = Proj_area,
+    family = family,
+    link = link,
+    pref_coef_bounds = c(-5, 5), ## perhaps make a user input, can be a difficult parameter to estimate
+    Nij = Nij,
+    apply_pref = ifelse(apply_preferential_sampling, 1, 0),
+    LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
+    model_matrix = model_matrix,
+    time_model_matrix = time_model_matrix,
+    X_spatial_ipt = X_spatial_ipt,
+    X_spatial_proj_zpt = X_spatial_proj_zpt,
+    omega_indicator = ifelse(include_omega, 1, 0),
+    epsilon_indicator = ifelse(include_epsilon, 1, 0),
+    spline_flag = c(ifelse(length(spline_catchability_covariates) > 0, 1, 0), ifelse(length(spline_spatial_covariates) > 0, 1, 0)),
+    spline_model_matrix = spline_$X[,-1],
+    spline_spatial_model_matrix_ipt = spline_spatial_model_matrix_ipt,
+    spline_spatial_model_matrix_proj_zpt = spline_spatial_model_matrix_proj_zpt,
+    S = S_catchability_combined,
+    Sdims = S_catchability_dims,
+    designMatrixForReport = S_catchability_design_matrix,
+    S_spatial = S_spatial_combined,
+    Sdims_spatial = S_spatial_dims,
+    designMatrixForReport_spatial = S_spatial_design_matrix,
+    spatial_constrained_coeff_ndx = spatial_constrained_coeff_ndx,
+    spatial_covar_type = spatial_covar_type,
+    simulate_GF = 0
+    
   )
   year_ndx_for_each_obs = matrix(-99, nrow = tmb_data$n_t, ncol = max(tmb_data$obs_t))
   for(t in 1:tmb_data$n_t) {
     year_ndx_for_each_obs[t, 1:tmb_data$obs_t[t]] = which(tmb_data$t_i == (t - 1)) - 1
   }
   tmb_data$year_ndx_for_each_obs = year_ndx_for_each_obs
-
+  
   if(linear_basis == 0) {
     tmb_data$A = A
     tmb_data$Proj = P
     tmb_data$model = "SpatialTemporalCPUE"
-    } else {
+  } else {
     tmb_data$index_proj_vertex = proj_vertex_ndx - 1 # R index -> C++ index
     tmb_data$index_data_vertex = data_vertex_ndx - 1 # R index -> C++ index
     tmb_data$model = "SpatialTemporalCPUENN"
     
   }
-
+  
   if(trace_level != "none")
     print(paste0("Passed: TMB data list construction"))
   
   # parameters for TMB
   dis_cor_0.1 = mean(0.5 * c(diff(range(mesh$loc[,1])), diff(range(mesh$loc[,2])))) # halfway 
   sigma_guess = 1 ## more intuative to think of marginal variance when setting starting values for params
-
+  
   params = list(
     betas = rep(0, ncol(tmb_data$model_matrix)),
     constrained_spatial_betas = rep(0, max(tmb_data$spatial_constrained_coeff_ndx) + 1),
     constrained_time_betas = rep(0, max(dim(tmb_data$time_model_matrix)[2] - 1,1)),
     ln_phi = 0,
-    logit_pref_coef = logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]),
+    logit_pref_coef = ifelse(pref_hyper_distribution == 0, logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)),
+    logit_pref_hyper_params = c(logit_pref_hyper_prior_vals[1], log(logit_pref_hyper_prior_vals[2])),
     lgcp_intercept = 0,
     ln_kappa_omega = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
     ln_tau_omega =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
@@ -434,19 +443,31 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   ## do we need to estimate a dispersion parameter
   if(family %in% c(1,3)) ## binomial and Poisson
     pars_to_fix = c(pars_to_fix, "ln_phi")
-
-
+  
+  vec_pars_to_adjust = NULL
+  vec_elements_to_exclude = NULL
   if (apply_preferential_sampling) {
     if(preference_model_type == 0)
       pars_to_fix = c(pars_to_fix, "lgcp_intercept")
+    if(pref_hyper_distribution == 0) {
+      pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
+    } else if(pref_hyper_distribution == 2) {
+      pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
+      vec_pars_to_adjust = c(vec_pars_to_adjust,"logit_pref_hyper_params")
+      vec_elements_to_exclude = list(logit_pref_hyper_params = c(1))
+    } else if(pref_hyper_distribution == 3) {
+      pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
+      vec_pars_to_adjust = c(vec_pars_to_adjust,"logit_pref_hyper_params")
+      vec_elements_to_exclude = list(logit_pref_hyper_params = c(2))
+    }
   } else {
-    pars_to_fix = c(pars_to_fix, "logit_pref_coef","lgcp_intercept")
+    pars_to_fix = c(pars_to_fix, "logit_pref_coef","lgcp_intercept", "logit_pref_hyper_params")
   }
-
+  
   fixed_pars = list()
   if(length(pars_to_fix) > 0)
-    fixed_pars = fix_pars(par_list = params, pars_to_exclude = pars_to_fix)
-
+    fixed_pars = fix_pars(par_list = params, pars_to_exclude = pars_to_fix, vec_pars_to_adjust = vec_pars_to_adjust, vec_elements_to_exclude = vec_elements_to_exclude)
+  
   
   ## compile model
   #compile(file.path("src","debug_standalone_version.cpp"))
@@ -455,16 +476,15 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   obj = NULL
   ## create ob
   to_be_silent = ifelse(trace_level == "none", TRUE, FALSE)
+  random_pars = NULL
+  if(include_epsilon)
+    random_pars = c(random_pars, "epsilon_input")
+  if(include_omega)
+    random_pars = c(random_pars, "omega_input")
+  if(apply_preferential_sampling & preference_model_type != 0)
+    random_pars = c(random_pars, "logit_pref_coef")
   
-  if(include_epsilon & include_omega) {
-    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input","omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
-  } else if(include_epsilon & !include_omega) {
-    obj <- MakeADFun(tmb_data, params, random = c("epsilon_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
-  } else if(!include_epsilon & include_omega) {
-    obj <- MakeADFun(tmb_data, params, random = c("omega_input"), map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
-  } else if(!include_epsilon & !include_omega) {
-    obj <- MakeADFun(tmb_data, params, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
-  }
+  obj <- MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
   
   if(trace_level != "none")
     print(paste0("Passed: successfully built obj"))

@@ -92,7 +92,8 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   // nuisance parameters
   PARAMETER(ln_phi);                                  // variance parameter for y_dist turn off for distributions such as Poisson.
   // Preference Model
-  PARAMETER(logit_pref_coef);                         // preferential parameter logistic transformation
+  PARAMETER_VECTOR(logit_pref_coef);            // preferential parameter logistic transformation
+  PARAMETER_VECTOR( logit_pref_hyper_params );  // vector continaing mu_pref and ln_sd_pref, in that order
   PARAMETER(lgcp_intercept);                          // intercept for the Log-Gaussian Cox Process Point process 
   
   // GMRF 
@@ -156,7 +157,6 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
   Type phi = exp(ln_phi); 
-  Type pref_coef = invlogit_general(logit_pref_coef, pref_coef_bounds(0), pref_coef_bounds(1));
   Type eps_rho = invlogit_general(logit_eps_rho, Type(-0.99), Type(0.99));
   Type kappa_omega = exp(ln_kappa_omega);
   Type tau_omega = exp(ln_tau_omega);
@@ -185,9 +185,20 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   pref_denom.setZero();
   spline_spatial_i.setZero();
   
-  vector<Type> nll(6);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial
+  vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
   
+  // transform preferential sampling coeffecients
+  vector<Type> pref_coef(n_t);
+  if(logit_pref_coef.size() == 1) {
+    for(t = 0; t < n_t; ++t)
+      pref_coef(t) = invlogit_general(logit_pref_coef(0), pref_coef_bounds(0), pref_coef_bounds(1));
+  } else {
+    for(t = 0; t < n_t; ++t) {
+      pref_coef(t) = invlogit_general(logit_pref_coef(t), pref_coef_bounds(0), pref_coef_bounds(1));
+      nll(6) -= dnorm(logit_pref_coef(t), logit_pref_hyper_params(0), exp(logit_pref_hyper_params(1)));
+    }
+  }
   // set some counters
   // Gaussian field stuff
   Type Range_omega = sqrt(8) / kappa_omega;
@@ -355,14 +366,14 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
     relative_index(t) = (Proj_Area * exp(time_betas(t) + epsilon_proj)).sum();
     
     if(LCGP_approach == 0) 
-      pref_denom(t) = log((Proj_Area * exp(pref_coef * spatial_proj)).sum()); 
+      pref_denom(t) = log((Proj_Area * exp(pref_coef(t) * spatial_proj)).sum()); 
     // deal with Pr(S | W, X) Observations
     if(apply_pref == 1) {
       if(LCGP_approach == 0) {
-        nll(3) -=  pref_coef * pref_numerator(t) - obs_t(t) * pref_denom(t);
+        nll(3) -=  pref_coef(t) * pref_numerator(t) - obs_t(t) * pref_denom(t);
       } else if(LCGP_approach == 1) {
         for(i = 0;i < n_p; ++i)
-          nll(3) -= dpois(Nij(i, t), Proj_Area(i) * exp(lgcp_intercept + pref_coef * spatial_proj(i)), true); 
+          nll(3) -= dpois(Nij(i, t), Proj_Area(i) * exp(lgcp_intercept + pref_coef(t) * spatial_proj(i)), true); 
       }
     }
   }
@@ -424,6 +435,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   
   REPORT( pref_coef );
   REPORT( lgcp_intercept );
+  REPORT( logit_pref_hyper_params );
   
   REPORT( phi );
   REPORT( mu );

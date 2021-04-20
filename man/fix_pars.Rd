@@ -18,16 +18,13 @@ fix_pars(
 
 \item{vec_pars_to_adjust}{a vector string of parameter labels that we want to exclude certain elements.}
 
-\item{vec_elements_to_exclude}{a list with number of elements = length(vec_pars_to_adjust). each list element 
+\item{vec_elements_to_exclude}{a named list (names same as par_list) with number of elements = length(vec_pars_to_adjust). each list element 
 contains a vector of elements that we want to exclude from estimation.}
 }
 \value{
 a list of factors used in the MakeADFun function
 }
 \description{
-TMB helper function
-}
-\details{
 this function returns a list of factors used in the map argument of the MakeADFun function
 }
 \author{

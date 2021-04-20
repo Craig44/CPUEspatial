@@ -96,6 +96,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   PARAMETER(ln_phi);                            // variance/dispersion parameter for y_dist turn off for distributions such as Poisson.
   // Preference Model
   PARAMETER_VECTOR(logit_pref_coef);            // preferential parameter logistic transformation
+  PARAMETER_VECTOR( logit_pref_hyper_params );  // vector continaing mu_pref and ln_sd_pref, in that order
   PARAMETER(lgcp_intercept);                    // intercept for the Log-Gaussian Cox Process Point process 
   // GMRF 
   PARAMETER( ln_kappa_omega );                  // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
@@ -118,7 +119,6 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ///////////////////////////
   int i, t, j, k, obs_ndx;
   int n_p = Proj_Area.size();
-  int n_t = constrained_time_betas.size() + 1;
   // un constrain spatial and catcspatialility coeffecients
   vector<Type> spatial_betas(X_spatial_ipt.col(0).cols());
   spatial_betas.setZero();
@@ -158,16 +158,6 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     time_betas(i) = constrained_time_betas(i);
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
-  
-  vector<type> pref_coef(n_t);
-  if(logit_pref_coef.size() == 1) {
-    for(t = 0; t < n_t; ++t)
-      pref_coef(t) = invlogit_general(logit_pref_coef(0), pref_coef_bounds(0), pref_coef_bounds(1));
-  } else {
-    for(t = 0; t < n_t; ++t)
-      pref_coef(t) = invlogit_general(logit_pref_coef(t), pref_coef_bounds(0), pref_coef_bounds(1));
-  }
-    
   Type phi = exp(ln_phi); 
   Type eps_rho = invlogit_general(logit_eps_rho, Type(-0.99), Type(0.99));
   Type kappa_omega = exp(ln_kappa_omega);
@@ -199,8 +189,21 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   pref_denom.setZero();
   spline_spatial_i.setZero();
   
-  vector<Type> nll(6);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial
+  vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
+  
+  // transform preferential sampling coeffecients
+  vector<Type> pref_coef(n_t);
+  if(logit_pref_coef.size() == 1) {
+    for(t = 0; t < n_t; ++t)
+      pref_coef(t) = invlogit_general(logit_pref_coef(0), pref_coef_bounds(0), pref_coef_bounds(1));
+  } else {
+    for(t = 0; t < n_t; ++t) {
+      pref_coef(t) = invlogit_general(logit_pref_coef(t), pref_coef_bounds(0), pref_coef_bounds(1));
+      nll(6) -= dnorm(logit_pref_coef(t), logit_pref_hyper_params(0), exp(logit_pref_hyper_params(1)));
+    }
+  }
+  
   
   // set some counters
   // Gaussian field stuff
@@ -403,6 +406,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( pref_denom );
   REPORT( lgcp_intercept );
   REPORT( pref_coef );
+  REPORT( logit_pref_hyper_params );
   
   REPORT( nll );
   REPORT( betas );
