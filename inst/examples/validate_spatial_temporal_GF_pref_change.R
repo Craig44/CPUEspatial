@@ -34,7 +34,9 @@ epsilon_model = RMmatern(nu = nu, var = epsilon_sigma2, scale = epsilon_range / 
 # sample size
 n = 1000 # per year
 n_years = 10
+#pref_beta = c(rep(3, 5), rep(1.5, 5)) ## constant preference coeffecient
 pref_beta = rep(1.5, n_years) ## constant preference coeffecient
+
 year_coef = c(rnorm(n_years / 2, 0.5, 0.6),rnorm(n_years / 2, 0, 0.6))
 plot(1:n_years, year_coef, type = "o")
 normalised_year_coef = year_coef - mean(year_coef)
@@ -52,6 +54,14 @@ prob_fleet2_per_year = c(rep(0, n_years - (n_years - 6)), seq(from = 0.2, to = 0
 prob_fleet3_per_year = 1 - (prob_fleet1_per_year + prob_fleet2_per_year)
 intercept = mean(year_coef) + fleet_coef[1] + mean(region_coef)
 
+## look at the coefs and expectation
+sys_range = range(rowSums(expand.grid(year_coef,region_coef, fleet_coef)))
+area_range = range(rlnorm(10000, log(0.01 * 0.02), 0.4))
+## expected
+shape * area_range * exp(sys_range)
+scale_range =  1/shape * area_range * exp(sys_range)
+var_range = shape * scale_range^2
+cv = 1/sqrt(shape)
 ## projection space
 predxseq = seq(0, grid_dim["x"],length.out = 50)
 unique(round(diff(predxseq),4))
@@ -146,9 +156,9 @@ for(sim in 1:N_sims) {
   data_ls[[sim]] = sampData
   ## check they all configure correclty
   spatial_model_w_omega = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 
-                                       response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
-                                       spatial_covariates = c("region"),  spline_catchability_covariates = NULL,
-                                       spline_spatial_covariates = NULL, trace_level = "none")
+                                        response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                                        spatial_covariates = c("region"),  spline_catchability_covariates = NULL,
+                                        spline_spatial_covariates = NULL, trace_level = "none")
   # tips on debugging
   opt_spa = nlminb(spatial_model_w_omega$obj$par, spatial_model_w_omega$obj$fn, spatial_model_w_omega$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
   rep_epsilon = spatial_model_w_omega$obj$report(spatial_model_w_omega$obj$env$last.par.best)
@@ -159,9 +169,9 @@ for(sim in 1:N_sims) {
   sd_ls[[sim]] = sd_rep
   
   spatial_model_w_omega_pref = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 
-                                        response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
-                                        spatial_covariates = c("region"),  spline_catchability_covariates = NULL,
-                                        spline_spatial_covariates = NULL, apply_preferential_sampling = T, preference_model_type = 0, trace_level = "none")
+                                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                                             spatial_covariates = c("region"),  spline_catchability_covariates = NULL,
+                                             spline_spatial_covariates = NULL, apply_preferential_sampling = T, preference_model_type = 0, trace_level = "none")
   
   opt_pref_spa = nlminb(spatial_model_w_omega_pref$obj$par, spatial_model_w_omega_pref$obj$fn, spatial_model_w_omega_pref$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
   rep_pref_epsilon = spatial_model_w_omega_pref$obj$report(spatial_model_w_omega_pref$obj$env$last.par.best)
@@ -174,18 +184,19 @@ for(sim in 1:N_sims) {
   true_ndx = tapply(full_proj_df$area * exp(year_coef[full_proj_df$year] + region_coef[full_proj_df$region] + full_proj_df$epsilon), INDEX = full_proj_df$year, FUN = sum)
   true_index_ls[[sim]] = true_ndx
   ## Compare indices
-  #par(mfrow = c(1,2))
-  #plot(1:n_years, normalised_year_coef, lwd= 3, lty = 1, col = "black", type  ="l", main = "Year coeffecients", ylab = "", xlab = "time")
-  #lines(1:n_years, rep_pref_epsilon$time_betas, lwd = 3, lty = 2, col = "blue")
-  #lines(1:n_years, rep_epsilon$time_betas, lwd = 3, lty = 3, col = "red")
+  par(mfrow = c(1,2))
+  plot(1:n_years, normalised_year_coef, lwd= 3, lty = 1, col = "black", type  ="l", main = "Year coeffecients", ylab = "", xlab = "time")
+  lines(1:n_years, rep_pref_epsilon$time_betas, lwd = 3, lty = 2, col = "blue")
+  lines(1:n_years, rep_epsilon$time_betas, lwd = 3, lty = 3, col = "red")
   
-  #plot(1:n_years, true_ndx / gm_mean(true_ndx), lwd = 3, lty = 1, type = "l", main = "Relative index", ylab = "", xlab = "time")
-  #lines(1:n_years, rep_pref_epsilon$relative_index / gm_mean(rep_pref_epsilon$relative_index), lty = 2, col = "blue", lwd =3)
-  #lines(1:n_years, rep_epsilon$relative_index / gm_mean(rep_epsilon$relative_index), lty = 3, col = "red", lwd =3)
+  plot(1:n_years, true_ndx / gm_mean(true_ndx), lwd = 3, lty = 1, type = "l", main = "Relative index", ylab = "", xlab = "time")
+  lines(1:n_years, rep_pref_epsilon$relative_index / gm_mean(rep_pref_epsilon$relative_index), lty = 2, col = "blue", lwd =3)
+  lines(1:n_years, rep_epsilon$relative_index / gm_mean(rep_epsilon$relative_index), lty = 3, col = "red", lwd =3)
+  legend("topright", col = c("blue","red","black"), legend = c("Preference","No Preference", "OM"), lwd =3, cex = 0.8)
   ##
 }
 #
-#save(rep_ls, opt_ls, sd_ls, data_ls, rep_pref_ls, opt_pref_ls, sd_pref_ls, file = "GF_omega_pref.RData")
+save(rep_ls, opt_ls, sd_ls, data_ls, rep_pref_ls, opt_pref_ls, sd_pref_ls, true_index_ls, file = "GF_TV_pref_1.5.RData")
 
 est_sd_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$MargSD_omega}))
 est_range_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$Range_omega}))
