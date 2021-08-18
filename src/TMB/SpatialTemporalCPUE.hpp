@@ -189,7 +189,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   pref_numerator.setZero();
   pref_denom.setZero();
   spline_spatial_i.setZero();
-  
+  epsilon_vec.setZero();
   vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
   
@@ -228,6 +228,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   Q = Q_spde(spde, kappa_epsilon);
   for(t = 0; t < epsilon_input.cols(); ++t) {
     if (epsilon_indicator == 1) {
+      epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
       if(epsilon_ar1 == 1) {
         if(t == 0) {
           nll(1) += GMRF(Q)(epsilon_input.col(t));
@@ -249,14 +250,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
         if(simulate_GF == 1) 
           epsilon_input.col(t) = GMRF(Q).simulate() ;
       }
-    } else {
-      nll(1) += GMRF(Q)(epsilon_input.col(t));
-      SIMULATE{
-        if(simulate_GF == 1) 
-          epsilon_input.col(t) = GMRF(Q).simulate() ;
-      }
     }
-    epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
+    
     spatial_Xbeta = X_spatial_ipt.col(t).matrix() * spatial_betas;
     spatial_splines = spline_spatial_model_matrix_ipt.col(t).matrix() * gammas_spatial;
     for(i = 0; i < obs_t(t); ++i) {
@@ -452,6 +447,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( phi );
   REPORT( mu );
   REPORT( eta );
+  REPORT( eps_rho );
+  
   // ADREPORT
   ADREPORT( phi );
   ADREPORT( pref_coef );
@@ -463,6 +460,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( betas );
   ADREPORT( time_betas );
   ADREPORT( betas_w_intercept );
+  ADREPORT( eps_rho );
   
   
   ADREPORT( relative_index );

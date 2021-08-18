@@ -12,8 +12,8 @@
 
 #' @param observed_df SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'
 #' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps
-#' @param include_epsilon boolean time-invariant spatial GF
-#' @param include_omega boolean time-varying spatial GF
+#' @param include_epsilon boolean time-varying spatial GF
+#' @param include_omega boolean time-invariant spatial GF 
 #' @param epsilon_structure character either "iid" or "ar1"
 #' @param response_variable_label character relating to a column name in observed_df
 #' @param time_variable_label character relating to a column names needs to be an integer variable 

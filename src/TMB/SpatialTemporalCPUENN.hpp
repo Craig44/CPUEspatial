@@ -459,6 +459,8 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   REPORT( phi );
   REPORT( mu );
   REPORT( eta );
+  REPORT( eps_rho );
+  
   // ADREPORT
   ADREPORT( phi );
   ADREPORT( pref_coef );
@@ -473,7 +475,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   
   ADREPORT( relative_index );
   ADREPORT( standardised_index );
-  
+  ADREPORT( eps_rho );
   return nll.sum();
 }
 
