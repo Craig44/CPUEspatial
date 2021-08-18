@@ -56,6 +56,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   DATA_INTEGER( omega_indicator );         // 0 = no, 1 = yes
   DATA_INTEGER( epsilon_indicator );       // 0 = no, 1 = yes
+  DATA_INTEGER( epsilon_ar1 );             // 0 = no, 1 = yes, ignored if epsilon_indicator = 0
   
   // GAM stuff
   DATA_IVECTOR( spline_flag );                // length(2) spline_flag(0) = catcspatialility factors, spline_flag(1) spatial covariates, 0 no splines, 1 yes splines
@@ -104,7 +105,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   PARAMETER( ln_kappa_epsilon );                // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
   PARAMETER( ln_tau_epsilon );                  // eta := kappa * tau, parameterisaton from https://github.com/nwfsc-assess/geostatistical_delta-GLMM/blob/master/inst/executables/geo_index_v4b.cpp
   
-  PARAMETER(logit_eps_rho);                     // Auto correlation parameter for Spatial temporal effect
+  PARAMETER(trans_eps_rho);                     // Auto correlation parameter for Spatial temporal effect
   // Random effects - marginalised out
   PARAMETER_VECTOR( omega_input );              // spatial random effects for each vertix n_x
   PARAMETER_ARRAY( epsilon_input );             // spatial temporal random effects for each vertix [n_x x n_t]
@@ -159,7 +160,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
   Type phi = exp(ln_phi); 
-  Type eps_rho = invlogit_general(logit_eps_rho, Type(-0.99), Type(0.99));
+  Type eps_rho =  trans_eps_rho / sqrt(1.0 + pow(trans_eps_rho, 2));
   Type kappa_omega = exp(ln_kappa_omega);
   Type tau_omega = exp(ln_tau_omega);
   Type kappa_epsilon = exp(ln_kappa_epsilon);
@@ -227,10 +228,32 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   Q = Q_spde(spde, kappa_epsilon);
   for(t = 0; t < epsilon_input.cols(); ++t) {
     if (epsilon_indicator == 1) {
+      if(epsilon_ar1 == 1) {
+        if(t == 0) {
+          nll(1) += GMRF(Q)(epsilon_input.col(t));
+          SIMULATE{
+            if(simulate_GF == 1) 
+              epsilon_input.col(t) = GMRF(Q).simulate() ;
+          }
+        } else {
+          nll(1) += GMRF(Q)(epsilon_input.col(t)  - eps_rho * epsilon_input.col(t - 1));   // AR(1)
+          SIMULATE{
+            if(simulate_GF == 1) 
+              epsilon_input.col(t) = eps_rho * epsilon_input.col(t - 1) + GMRF(Q).simulate() ;
+          }
+        }
+      } else {
+        nll(1) += GMRF(Q)(epsilon_input.col(t));
+      }
+      SIMULATE{
+        if(simulate_GF == 1) 
+          epsilon_input.col(t) = GMRF(Q).simulate() ;
+      }
+    } else {
       nll(1) += GMRF(Q)(epsilon_input.col(t));
       SIMULATE{
         if(simulate_GF == 1) 
-          epsilon_input.col(t) = GMRF(Q).simulate();
+          epsilon_input.col(t) = GMRF(Q).simulate() ;
       }
     }
     epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;

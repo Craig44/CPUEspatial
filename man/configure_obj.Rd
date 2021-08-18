@@ -12,6 +12,7 @@ configure_obj(
   link,
   include_omega,
   include_epsilon,
+  epsilon_structure = "iid",
   response_variable_label,
   time_variable_label,
   catchability_covariates = NULL,
@@ -41,6 +42,8 @@ configure_obj(
 \item{include_omega}{boolean time-varying spatial GF}
 
 \item{include_epsilon}{boolean time-invariant spatial GF}
+
+\item{epsilon_structure}{character either "iid" or "ar1"}
 
 \item{response_variable_label}{character relating to a column name in observed_df}
 

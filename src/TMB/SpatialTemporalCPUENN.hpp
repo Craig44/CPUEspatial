@@ -47,6 +47,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   
   DATA_INTEGER( omega_indicator );       // is this component estimated in the model? 0 = no, 1 = yes
   DATA_INTEGER( epsilon_indicator );     // is this component estimated in the model? 0 = no, 1 = yes
+  DATA_INTEGER( epsilon_ar1 );             // 0 = no, 1 = yes, ignored if epsilon_indicator = 0
   DATA_IVECTOR( index_data_vertex );     // length n_i, links each data point to a vertex.
   DATA_IVECTOR( index_proj_vertex );     // length n_p, links each data point to a projecitons grid.
   
@@ -102,7 +103,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   PARAMETER( ln_kappa_epsilon );                // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
   PARAMETER( ln_tau_epsilon );                  // eta := kappa * tau, parameterisaton from https://github.com/nwfsc-assess/geostatistical_delta-GLMM/blob/master/inst/executables/geo_index_v4b.cpp
   
-  PARAMETER(logit_eps_rho);               // Auto correlation parameter for Spatial temporal effect
+  PARAMETER(trans_eps_rho);                     // Auto correlation parameter for Spatial temporal effect
   // Random effects - marginalised out
   PARAMETER_VECTOR( omega_input );              // spatial random effects for each vertix n_x
   PARAMETER_ARRAY( epsilon_input );             // spatial temporal random effects for each vertix [n_x x n_t]
@@ -157,7 +158,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
   Type phi = exp(ln_phi); 
-  Type eps_rho = invlogit_general(logit_eps_rho, Type(-0.99), Type(0.99));
+  Type eps_rho =  trans_eps_rho / sqrt(1.0 + pow(trans_eps_rho, 2));
   Type kappa_omega = exp(ln_kappa_omega);
   Type tau_omega = exp(ln_tau_omega);
   Type kappa_epsilon = exp(ln_kappa_epsilon);
@@ -223,11 +224,29 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
   GMRF_t<Type> gmrf_Q = GMRF(Q);
   for(t = 0; t < epsilon_input.cols(); ++t) {
     if (epsilon_indicator == 1) {
-      nll(1) += SCALE(gmrf_Q, Type(1.0) / tau_epsilon)(epsilon_input.col(t));
-      SIMULATE {
-        if(simulate_GF == 1) {
-          epsilon_input.col(t) = GMRF(Q).simulate();
-          epsilon_input.col(t)  *= exp(-tau_epsilon);
+      if(epsilon_ar1 == 1) {
+        if(t == 0) {
+          nll(1) += SCALE(gmrf_Q, Type(1.0)/ tau_epsilon)(epsilon_input.col(t));
+          SIMULATE{
+            if(simulate_GF == 1) 
+              epsilon_input.col(t) = GMRF(Q).simulate();
+            epsilon_input.col(t)  *= exp(-tau_epsilon);          
+          }
+        } else {
+          nll(1) += SCALE(gmrf_Q, Type(1.0)/ tau_epsilon)(epsilon_input.col(t) - eps_rho * epsilon_input.col(t - 1));
+          SIMULATE{
+            if(simulate_GF == 1) 
+              epsilon_input.col(t) = GMRF(Q).simulate() + eps_rho * epsilon_input.col(t - 1);
+            epsilon_input.col(t)  *= exp(-tau_epsilon);          
+          }
+        }
+      } else {
+        nll(1) += SCALE(gmrf_Q, Type(1.0) / tau_epsilon)(epsilon_input.col(t));
+        SIMULATE {
+          if(simulate_GF == 1) {
+            epsilon_input.col(t) = GMRF(Q).simulate();
+            epsilon_input.col(t)  *= exp(-tau_epsilon);
+          }
         }
       }
     }

@@ -14,6 +14,7 @@
 #' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps
 #' @param include_epsilon boolean time-invariant spatial GF
 #' @param include_omega boolean time-varying spatial GF
+#' @param epsilon_structure character either "iid" or "ar1"
 #' @param response_variable_label character relating to a column name in observed_df
 #' @param time_variable_label character relating to a column names needs to be an integer variable 
 #' @param catchability_covariates string vector of column labels corresponding for catchability realted covariates, if type not numeric it is treated as categorical
@@ -41,7 +42,7 @@
 #' @importFrom raster raster rasterize crs
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
-configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
+configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, epsilon_structure = "iid", response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
                          spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none") {
   Call = list()
   Call$func_call <- match.call()
@@ -57,6 +58,8 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     stop(paste0("family needs to be a value from 0 to 3, for a valid distribution"))
   if(!link %in% c(0:4))
     stop(paste0("link needs to be a value from 0 to 4, for a valid link function"))
+  if(!epsilon_structure %in% c("iid", "ar1"))
+    stop("epsilon_structure, needs to either be 'iid' or 'ar1'")
   set_up_dummy_proj = TRUE
   if(apply_preferential_sampling & preference_model_type == 1) {
     if(is.null(projection_raster_layer))
@@ -361,6 +364,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     X_spatial_proj_zpt = X_spatial_proj_zpt,
     omega_indicator = ifelse(include_omega, 1, 0),
     epsilon_indicator = ifelse(include_epsilon, 1, 0),
+    epsilon_ar1 = ifelse(epsilon_structure == "iid", 0, 1),
     spline_flag = c(ifelse(length(spline_catchability_covariates) > 0, 1, 0), ifelse(length(spline_spatial_covariates) > 0, 1, 0)),
     spline_model_matrix = spline_$X[,-1],
     spline_spatial_model_matrix_ipt = spline_spatial_model_matrix_ipt,
@@ -412,7 +416,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     ln_tau_omega =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
     ln_kappa_epsilon = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
     ln_tau_epsilon =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
-    logit_eps_rho = logit_general(0, -0.99, 0.99),
+    trans_eps_rho = 0,
     omega_input = rep(0,spde$n.spde),
     epsilon_input = array(0,dim = c(spde$n.spde, tmb_data$n_t)),
     gammas = rep(0,sum(tmb_data$Sdims)),  # Spline coefficients
@@ -433,7 +437,9 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     return(list(errors = any_errors$errors, tmb_pars = params, tmb_data = tmb_data))
   }
   ## set which parameters are being estimated and which are held constant.drr
-  pars_to_fix = c("logit_eps_rho")
+  pars_to_fix = NULL;
+  if(epsilon_structure == "iid")
+    pars_to_fix = c(pars_to_fix, "trans_eps_rho")
   if(!include_epsilon)
     pars_to_fix = c(pars_to_fix, "epsilon_input", "ln_kappa_epsilon", "ln_tau_epsilon")
   if(!include_omega)

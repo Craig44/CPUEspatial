@@ -1,51 +1,6 @@
 #'
-#' Real example
-#'
-
-library(CPUEspatial)
-library(kableExtra)
-library(nzPlot)
-library(geoR)
-library(rgdal)
-library(rgeos)
-library(fields)
-library(reshape2)
-library(ggplot2)
-library(gridExtra)
-library(RColorBrewer)
-library(raster)
-library(INLA)
-library(TMB)
-library(dplyr)
-source(file.path("inst", "examples","read_NZ_polys.R"))
-source(file.path("inst", "examples", "influ.R"))
-
-head(cpue_df)
-cpue_df$area = cpue_df$fishing_distance * cpue_df$effort_width/1000 # km^2
-## remove zero area fishing events
-cpue_df = subset(cpue_df, subset = cpue_df$area > 0)
-cpue_df$log_catch = log(cpue_df$BAR_catch)
-bad_ndx = names(table(cpue_df$vessel_key))[table(cpue_df$vessel_key) < 5]
-dim(cpue_df)
-cpue_df = subset(cpue_df, subset = !cpue_df$vessel_key %in% bad_ndx )
-dim(cpue_df)
-## fit glm model
-log_positive = glm(log_catch ~ fish_year + vessel_key + target_species + start_stats_area_code + fish_month, offset = area, data = cpue_df)
-log_positive_alt = glm(BAR_catch ~ fish_year + vessel_key + target_species + start_stats_area_code +fish_month, offset = area, data = cpue_df, family = gaussian(link = "log"))
-gamma_glm = glm(BAR_catch ~ fish_year + vessel_key + target_species + start_stats_area_code + fish_month, offset = area, data = cpue_df, family = Gamma(link = "log"))
-summary(log_positive)
-summary(gamma_glm)
-summary(log_positive_alt)
-
-##Geostatistical model set up
-nz(ylim = c(-45, -53))
-nz.polygon(nz.statarea(labels = T))
-nz.points(cpue_df$start_longitude, cpue_df$start_latitude, pch = 16)
-#proj_poly = nz.locator()
-proj_poly =  list(x = c(165.4688, 165.6495, 165.6947, 167.9993, 167.9993, 168.9935, 170.1684, 170.1684, 168.2253),
-                  y = c(-46.32088, -50.02528, -52.04248, -51.37043, -48.99842, -49.02806, -48.52180, -46.66310, -46.03929))
-## 503 = 29
-## 603 = 602
+#' Real example loosely based on BAR 5 & 6
+ # 603 = 602
 ## 604 = 602
 ## 303 = 504
 
