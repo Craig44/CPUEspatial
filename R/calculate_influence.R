@@ -1,4 +1,4 @@
-#' calculate_influence
+#' @title calculate_influence
 #' 
 #' @details 
 #' given an optimsied model that has been output from configure_obj() function, we will generate a bunch of influence statistics following the work from Nokome's influence plot metrics.
@@ -47,7 +47,7 @@ calculate_influence = function(conf_obj, data_df) {
   for(i in 1:length(catch_terms)) {
     coeff_ndx = grepl(catchability_coef_labs, pattern = catch_terms[i])
     labs = substring(catchability_coef_labs[coeff_ndx], first = nchar(catch_terms[i]) + 1)
-    if(catchability_type[i] == "factor") { #include intercept
+    if(catchability_type[i] == "factor" | catchability_type[i] == "character" ) { #include intercept
       coeff_ndx[1] = TRUE
       MLE = sd_rep$value[sd_rep_labs %in% "betas_w_intercept"][coeff_ndx]
       se = sd_rep$sd[sd_rep_labs %in% "betas_w_intercept"][coeff_ndx]
@@ -60,8 +60,8 @@ calculate_influence = function(conf_obj, data_df) {
       ## attach coeffecients catchability_lab_df
       orig_colnames = colnames(catchability_lab_df)
       data_terms = get(catch_terms[i], catchability_lab_df)
-      ndx = match(data_terms, catch_terms_ls[[catch_terms[i]]]$labs)
-      coeff_terms = catch_terms_ls[[catch_terms[i]]]$MLE[ndx]
+      ndx = match(data_terms, terms_ls[[catch_terms[i]]]$labs)
+      coeff_terms = terms_ls[[catch_terms[i]]]$MLE[ndx]
       catchability_lab_df = cbind(catchability_lab_df, coeff_terms)
       colnames(catchability_lab_df) = c(orig_colnames, paste0(catch_terms[i], ".fit"))
     } else {
@@ -88,8 +88,8 @@ calculate_influence = function(conf_obj, data_df) {
       ## attach coeffecients catchability_lab_df
       orig_colnames = colnames(spatial_lab_df)
       data_terms = get(spatial_terms[i], spatial_lab_df)
-      ndx = match(data_terms, spatial_terms_ls[[spatial_terms[i]]]$labs)
-      coeff_terms = spatial_terms_ls[[spatial_terms[i]]]$MLE[ndx]
+      ndx = match(data_terms, terms_ls[[spatial_terms[i]]]$labs)
+      coeff_terms = terms_ls[[spatial_terms[i]]]$MLE[ndx]
       spatial_lab_df = cbind(spatial_lab_df, coeff_terms)
       colnames(spatial_lab_df) = c(orig_colnames, paste0(spatial_terms[i], ".fit"))
     } else {
