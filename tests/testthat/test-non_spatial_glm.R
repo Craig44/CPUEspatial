@@ -16,7 +16,7 @@ test_that("gamma_glm", {
   simple_model = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
                                response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
                                spatial_covariates = NULL, spline_catchability_covariates = NULL,
-                               spline_spatial_covariates = NULL, trace_level = "none")
+                               spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 0)
   simple_model_NN = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = F, include_epsilon = F, 
                                response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
                                spatial_covariates = NULL, spline_catchability_covariates = NULL,
@@ -27,8 +27,8 @@ test_that("gamma_glm", {
   opt_NN = nlminb(simple_model_NN$obj$par, simple_model_NN$obj$fn, simple_model_NN$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
   #opt$convergence
   ## get derived quantities
-  rep_CPUE_spatial = simple_model_NN$obj$report(simple_model_NN$obj$env$last.par.best)
-  rep_CPUE_spatial_NN = simple_model$obj$report(simple_model$obj$env$last.par.best)
+  rep_CPUE_spatial_NN = simple_model_NN$obj$report(simple_model_NN$obj$env$last.par.best)
+  rep_CPUE_spatial = simple_model$obj$report(simple_model$obj$env$last.par.best)
   simple_glm = glm(y_i ~  factor(year) + factor(fleet_ndx), offset = log(area), data = data, family = Gamma(link = log))
   expect_equal(object = deviance_calc(y = data$y_i, mu = rep_CPUE_spatial$mu, dist = "gamma"),
                expected = summary(simple_glm)$deviance, 

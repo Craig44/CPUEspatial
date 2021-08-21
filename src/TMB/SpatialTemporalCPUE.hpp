@@ -56,6 +56,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   DATA_INTEGER( omega_indicator );         // 0 = no, 1 = yes
   DATA_INTEGER( epsilon_indicator );       // 0 = no, 1 = yes
+  DATA_INTEGER( epsilon_ar1 );             // 0 = no, 1 = yes, ignored if epsilon_indicator = 0
   
   // GAM stuff
   DATA_IVECTOR( spline_flag );                // length(2) spline_flag(0) = catcspatialility factors, spline_flag(1) spatial covariates, 0 no splines, 1 yes splines
@@ -104,7 +105,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   PARAMETER( ln_kappa_epsilon );                // spatial decay/range parameter if ln_kappa.size() = 1, then both omega and epsilon have the same range parameter
   PARAMETER( ln_tau_epsilon );                  // eta := kappa * tau, parameterisaton from https://github.com/nwfsc-assess/geostatistical_delta-GLMM/blob/master/inst/executables/geo_index_v4b.cpp
   
-  PARAMETER(logit_eps_rho);                     // Auto correlation parameter for Spatial temporal effect
+  PARAMETER(trans_eps_rho);                     // Auto correlation parameter for Spatial temporal effect
   // Random effects - marginalised out
   PARAMETER_VECTOR( omega_input );              // spatial random effects for each vertix n_x
   PARAMETER_ARRAY( epsilon_input );             // spatial temporal random effects for each vertix [n_x x n_t]
@@ -159,7 +160,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   time_betas(time_betas.size() - 1) = -1.0 * constrained_time_betas.sum();
   
   Type phi = exp(ln_phi); 
-  Type eps_rho = invlogit_general(logit_eps_rho, Type(-0.99), Type(0.99));
+  Type eps_rho =  trans_eps_rho / sqrt(1.0 + pow(trans_eps_rho, 2));
   Type kappa_omega = exp(ln_kappa_omega);
   Type tau_omega = exp(ln_tau_omega);
   Type kappa_epsilon = exp(ln_kappa_epsilon);
@@ -188,7 +189,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   pref_numerator.setZero();
   pref_denom.setZero();
   spline_spatial_i.setZero();
-  
+  epsilon_vec.setZero();
   vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
   
@@ -227,13 +228,30 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   Q = Q_spde(spde, kappa_epsilon);
   for(t = 0; t < epsilon_input.cols(); ++t) {
     if (epsilon_indicator == 1) {
-      nll(1) += GMRF(Q)(epsilon_input.col(t));
+      epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
+      if(epsilon_ar1 == 1) {
+        if(t == 0) {
+          nll(1) += GMRF(Q)(epsilon_input.col(t));
+          SIMULATE{
+            if(simulate_GF == 1) 
+              epsilon_input.col(t) = GMRF(Q).simulate() ;
+          }
+        } else {
+          nll(1) += GMRF(Q)(epsilon_input.col(t)  - eps_rho * epsilon_input.col(t - 1));   // AR(1)
+          SIMULATE{
+            if(simulate_GF == 1) 
+              epsilon_input.col(t) = eps_rho * epsilon_input.col(t - 1) + GMRF(Q).simulate() ;
+          }
+        }
+      } else {
+        nll(1) += GMRF(Q)(epsilon_input.col(t));
+      }
       SIMULATE{
         if(simulate_GF == 1) 
-          epsilon_input.col(t) = GMRF(Q).simulate();
+          epsilon_input.col(t) = GMRF(Q).simulate() ;
       }
     }
-    epsilon_vec = A * vector<Type>(epsilon_input.col(t)) / tau_epsilon;
+    
     spatial_Xbeta = X_spatial_ipt.col(t).matrix() * spatial_betas;
     spatial_splines = spline_spatial_model_matrix_ipt.col(t).matrix() * gammas_spatial;
     for(i = 0; i < obs_t(t); ++i) {
@@ -429,6 +447,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   REPORT( phi );
   REPORT( mu );
   REPORT( eta );
+  REPORT( eps_rho );
+  
   // ADREPORT
   ADREPORT( phi );
   ADREPORT( pref_coef );
@@ -440,6 +460,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   ADREPORT( betas );
   ADREPORT( time_betas );
   ADREPORT( betas_w_intercept );
+  ADREPORT( eps_rho );
   
   
   ADREPORT( relative_index );
