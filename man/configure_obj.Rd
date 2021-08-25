@@ -39,9 +39,9 @@ configure_obj(
 
 \item{link}{link function 0 = log, 1 = logit, 2 = probit, 3 = inverse, 4 = identity, 5 = inverse squared (1/x^2)}
 
-\item{include_omega}{boolean time-varying spatial GF}
+\item{include_omega}{boolean time-invariant spatial GF}
 
-\item{include_epsilon}{boolean time-invariant spatial GF}
+\item{include_epsilon}{boolean time-varying spatial GF}
 
 \item{epsilon_structure}{character either "iid" or "ar1"}
 

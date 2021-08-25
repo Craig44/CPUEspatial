@@ -35,12 +35,16 @@ epsilon_model = RMmatern(nu = nu, var = epsilon_sigma2, scale = epsilon_range / 
 n = 1000 # per year
 n_years = 10
 #pref_beta = c(rep(3, 5), rep(1.5, 5)) ## constant preference coeffecient
-pref_beta = rep(1.5, n_years) ## constant preference coeffecient
-
+#pref_beta = rep(1.5, n_years) ## constant preference coeffecient
+pref_beta = rnorm(n_years, 1.5, 1.5 * 0.3) ## constant preference coeffecient
+logistic_general(pref_beta)
+hist(CPUEspatial:::logit_general(pref_beta, -5,5))
+mean(CPUEspatial:::logit_general(pref_beta, -5,5))
+sd(CPUEspatial:::logit_general(pref_beta, -5,5))
 year_coef = c(rnorm(n_years / 2, 0.5, 0.6),rnorm(n_years / 2, 0, 0.6))
 plot(1:n_years, year_coef, type = "o")
 normalised_year_coef = year_coef - mean(year_coef)
-shape = 50 ### for gamma response variable
+shape = 10 ### for gamma response variable
 
 region_coef = rnorm(4,0, 0.6) # region coeffecients
 region_lab = c("A","B","C","D")
@@ -89,7 +93,9 @@ year_samples = sample(1:n_years, size = n * n_years, replace = T,  prob = rep(1,
 rep_ls = opt_ls = sd_ls = data_ls = list()
 true_index_ls = list();
 rep_pref_ls = opt_pref_ls = sd_pref_ls  = list()
-N_sims = 100
+rep_time_pref_ls = opt_time_pref_ls = sd_time_pref_ls  = list()
+
+N_sims = 10
 ################################################
 # This simulation can take some time FYI
 # load(file = "GF_omega_pref.RData")
@@ -99,7 +105,6 @@ for(sim in 1:N_sims) {
   if(sim %% 5 == 0)
     cat("sim = ", sim, "\n")
   ## Simulate sample locations based on population spatial distribution
-  
   sampData = fleet_ndx = NULL;
   full_proj_df = NULL
   for(i in 1:n_years) {
@@ -159,6 +164,7 @@ for(sim in 1:N_sims) {
                                         response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
                                         spatial_covariates = c("region"),  spline_catchability_covariates = NULL,
                                         spline_spatial_covariates = NULL, trace_level = "none")
+  
   # tips on debugging
   opt_spa = nlminb(spatial_model_w_omega$obj$par, spatial_model_w_omega$obj$fn, spatial_model_w_omega$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
   rep_epsilon = spatial_model_w_omega$obj$report(spatial_model_w_omega$obj$env$last.par.best)
@@ -181,6 +187,21 @@ for(sim in 1:N_sims) {
   opt_pref_ls[[sim]] = opt_pref_spa
   sd_pref_ls[[sim]] = sd_pref_rep
   
+  ## time-varying
+  spatial_model_w_time_omega_pref = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 
+                                             response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                                             spatial_covariates = c("region"),  spline_catchability_covariates = NULL, pref_hyper_distribution = 2,logit_pref_hyper_prior_vals = c(0.6,0.2),
+                                             spline_spatial_covariates = NULL, apply_preferential_sampling = T, preference_model_type = 0, trace_level = "none")
+  
+  opt_time_pref_spa = nlminb(spatial_model_w_time_omega_pref$obj$par, spatial_model_w_time_omega_pref$obj$fn, spatial_model_w_time_omega_pref$obj$gr, control = list(eval.max = 10000, iter.max = 10000))
+  rep_time_pref_epsilon = spatial_model_w_time_omega_pref$obj$report(spatial_model_w_time_omega_pref$obj$env$last.par.best)
+  sd_time_pref_rep = sdreport(spatial_model_w_time_omega_pref$obj)
+  
+  rep_time_pref_ls[[sim]] = rep_time_pref_epsilon
+  opt_time_pref_ls[[sim]] = opt_time_pref_spa
+  sd_time_pref_ls[[sim]] = sd_time_pref_rep
+
+  
   true_ndx = tapply(full_proj_df$area * exp(year_coef[full_proj_df$year] + region_coef[full_proj_df$region] + full_proj_df$epsilon), INDEX = full_proj_df$year, FUN = sum)
   true_index_ls[[sim]] = true_ndx
   ## Compare indices
@@ -188,56 +209,98 @@ for(sim in 1:N_sims) {
   plot(1:n_years, normalised_year_coef, lwd= 3, lty = 1, col = "black", type  ="l", main = "Year coeffecients", ylab = "", xlab = "time")
   lines(1:n_years, rep_pref_epsilon$time_betas, lwd = 3, lty = 2, col = "blue")
   lines(1:n_years, rep_epsilon$time_betas, lwd = 3, lty = 3, col = "red")
+  lines(1:n_years, rep_time_pref_epsilon$time_betas, lwd = 3, lty = 3, col = "purple")
   
   plot(1:n_years, true_ndx / gm_mean(true_ndx), lwd = 3, lty = 1, type = "l", main = "Relative index", ylab = "", xlab = "time")
   lines(1:n_years, rep_pref_epsilon$relative_index / gm_mean(rep_pref_epsilon$relative_index), lty = 2, col = "blue", lwd =3)
   lines(1:n_years, rep_epsilon$relative_index / gm_mean(rep_epsilon$relative_index), lty = 3, col = "red", lwd =3)
-  legend("topright", col = c("blue","red","black"), legend = c("Preference","No Preference", "OM"), lwd =3, cex = 0.8)
+  lines(1:n_years, rep_time_pref_epsilon$relative_index / gm_mean(rep_time_pref_epsilon$relative_index), lty = 3, col = "purple", lwd =3)
+  legend("bottomleft", col = c("blue","red", "purple","black"), legend = c("Preference","Preference (time-vary)","No Preference", "OM"), lwd =3, cex = 0.8)
   ##
 }
+
 #
-save(rep_ls, opt_ls, sd_ls, data_ls, rep_pref_ls, opt_pref_ls, sd_pref_ls, true_index_ls, file = "GF_TV_pref_1.5.RData")
+save(rep_ls, opt_ls, sd_ls, data_ls, rep_pref_ls, opt_pref_ls, sd_pref_ls, true_index_ls, file = "GF_TV_pref_time_vary.RData")
 
 est_sd_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$MargSD_omega}))
 est_range_omega = Reduce(c, lapply(rep_ls, FUN = function(x) {x$Range_omega}))
 
 est_sd_omega_pref = Reduce(c, lapply(rep_pref_ls, FUN = function(x) {x$MargSD_omega}))
 est_range_omega_pref = Reduce(c, lapply(rep_pref_ls, FUN = function(x) {x$Range_omega}))
-est_omega_pref_pref = Reduce(c, lapply(rep_pref_ls, FUN = function(x) {x$pref_coef}))
+
+est_sd_omega_time_pref = Reduce(c, lapply(rep_time_pref_ls, FUN = function(x) {x$MargSD_omega}))
+est_range_omega_time_pref = Reduce(c, lapply(rep_time_pref_ls, FUN = function(x) {x$Range_omega}))
+
+est_omega_pref_pref = Reduce(rbind, lapply(rep_pref_ls, FUN = function(x) {x$pref_coef}))
+est_omega_time_pref_pref = Reduce(rbind, lapply(rep_time_pref_ls, FUN = function(x) {x$pref_coef}))
 
 boxplot(est_omega_pref_pref, ylim = c(0,2))
+boxplot(est_omega_time_pref_pref, ylim = c(0,2))
 abline(h = unique(pref_beta), lwd = 3, lty = 2, col = "red")
 
-boxplot(cbind(est_sd_omega, est_sd_omega_pref))
+boxplot(cbind(est_sd_omega, est_sd_omega_pref, est_sd_omega_time_pref))
 abline(h = sqrt(epsilon_sigma2), lwd = 3, lty = 2, col = "red")
 
-boxplot(cbind(est_range_omega, est_range_omega_pref))
+boxplot(cbind(est_range_omega, est_range_omega_pref, est_range_omega_time_pref))
 abline(h = (epsilon_range), lwd = 3, lty = 2, col = "red")
 
 ## get coeffecients and relative index
 relative_index = Reduce(rbind, lapply(rep_ls, FUN = function(x) {x$relative_index}))
 relative_index_pref = Reduce(rbind, lapply(rep_pref_ls, FUN = function(x) {x$relative_index}))
+relative_index_time_pref = Reduce(rbind, lapply(rep_time_pref_ls, FUN = function(x) {x$relative_index}))
+
 standardised_index = Reduce(rbind, lapply(rep_ls, FUN = function(x) {x$relative_index / gm_mean(x$relative_index)}))
 standardised_index_pref = Reduce(rbind, lapply(rep_pref_ls, FUN = function(x) {x$relative_index / gm_mean(x$relative_index)}))
+standardised_index_time_pref = Reduce(rbind, lapply(rep_time_pref_ls, FUN = function(x) {x$relative_index / gm_mean(x$relative_index)}))
 year_index = Reduce(rbind, lapply(rep_ls, FUN = function(x) {x$time_betas}))
 year_index_pref = Reduce(rbind, lapply(rep_pref_ls, FUN = function(x) {x$time_betas}))
+year_index_time_pref = Reduce(rbind, lapply(rep_time_pref_ls, FUN = function(x) {x$time_betas}))
+
+true_stand = Reduce(rbind, lapply(true_index_ls, FUN = function(x) {x/ gm_mean(x)}))
+RE_stand_pref = (standardised_index_pref - true_stand) / true_stand
+RE_stand_time_pref = (standardised_index_time_pref - true_stand) / true_stand
+RE_stand = (standardised_index - true_stand) / true_stand
+
+
 ## plot relative index, geometric index
-rownames(year_index) = rownames(year_index_pref) = rownames(standardised_index) = rownames(relative_index)  = rownames(relative_index_pref) = rownames(standardised_index_pref) = paste0("sim_", 1:nrow(relative_index))
+rownames(RE_stand) = rownames(RE_stand_pref) = rownames(RE_stand_time_pref) = rownames(year_index) = rownames(year_index_pref)  = rownames(year_index_time_pref) = rownames(standardised_index) = rownames(relative_index)  = rownames(relative_index_pref) = rownames(standardised_index_pref) = rownames(relative_index_time_pref) = rownames(standardised_index_time_pref) = paste0("sim_", 1:nrow(relative_index))
 
 melt_year = melt(year_index)
 melt_year_pref = melt(year_index_pref)
+melt_year_time_pref = melt(year_index_time_pref)
 melt_year$model = "No Preference"
 melt_year_pref$model = "Preference"
-year_df = rbind(melt_year, melt_year_pref)
+melt_year_time_pref$model = "Time vary Preference"
+year_df = rbind(melt_year, melt_year_pref, melt_year_time_pref)
 colnames(year_df) = c("sim", "time", "value", "model")
+
+melt_RE = melt(RE_stand)
+melt_RE_pref = melt(RE_stand_pref)
+melt_RE_time_pref = melt(RE_stand_time_pref)
+melt_RE$model = "No Preference"
+melt_RE_pref$model = "Preference"
+melt_RE_time_pref$model = "Time vary Preference"
+RE_df = rbind(melt_RE, melt_RE_pref, melt_RE_time_pref)
+colnames(RE_df) = c("sim", "time", "value", "model")
 
 
 melt_stand = melt(standardised_index)
 melt_stand_pref = melt(standardised_index_pref)
+melt_stand_time_pref = melt(standardised_index_time_pref)
 melt_stand$model = "No Preference"
 melt_stand_pref$model = "Preference"
-stand_df = rbind(melt_stand, melt_stand_pref)
+melt_stand_time_pref$model = "Time vary Preference"
+stand_df = rbind(melt_stand, melt_stand_pref, melt_stand_time_pref)
 colnames(stand_df) = c("sim", "time", "value", "model")
+
+melt_relative = melt(relative_index)
+melt_relative_pref = melt(relative_index_pref)
+melt_relative_time_pref = melt(relative_index_time_pref)
+melt_relative$model = "No Preference"
+melt_relative_pref$model = "Preference"
+melt_relative_time_pref$model = "Time vary Preference"
+relative_df = rbind(melt_relative, melt_relative_pref, melt_relative_time_pref)
+colnames(relative_df) = c("sim", "time", "value", "model")
 
 melt_relative = melt(relative_index)
 melt_relative_pref = melt(relative_index_pref)
@@ -247,6 +310,10 @@ relative_df = rbind(melt_relative, melt_relative_pref)
 colnames(relative_df) = c("sim", "time", "value", "model")
 
 ## get quanitles
+RE_summary = RE_df %>% 
+  group_by(time, model) %>% 
+  summarize(lower = quantile(value, 0.025), upper = quantile(value, 0.975), mid = quantile(value, 0.5))
+
 relative_summary = relative_df %>% 
   group_by(time, model) %>% 
   summarize(lower = quantile(value, 0.025), upper = quantile(value, 0.975), mid = quantile(value, 0.5))
@@ -280,3 +347,14 @@ ggplot(year_summary, aes(x = time, y = mid, col = model, alpha = 0.1, fill = mod
   geom_line(data = true_coef_df, aes(x = time, y = true_year_coef), inherit.aes = F, size = 1.2, linetype = "dashed") + 
   ylab("Normalised year coeffecients")
 
+
+## visualise
+standardies_RE_plt = ggplot(RE_summary, aes(x = time, y = mid, col = model, alpha = 0.1, fill = model, linetype = model)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper)) +
+  geom_line(size = 1.5, alpha = 1.4,col = "black") +
+  scale_alpha(guide = "none") +
+  ylab(bquote(RE(bold(widetilde(I[y]))))) +
+  theme(axis.title=element_text(size=12, face="bold")) +
+  ggtitle("") +
+  geom_hline(yintercept = 0, size = 1.3, linetype = "dashed", col = "gray60")
+standardies_RE_plt
