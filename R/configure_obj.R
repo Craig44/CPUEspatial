@@ -271,12 +271,12 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
       stop(paste0("the object projection_raster_layer, needs to have the data values == 1, for each projection cell. Found sum(projection_raster_layer@data@values == 1) = ", sum(projection_raster_layer@data@values == 1) , " and n_z projection cells = ", n_z))
   }
   
+  
   X_spatial_proj_zpt = array(1, dim = c(n_z, ncol(data_spatial_model_matrix), n_t), dimnames = list(NULL, colnames(data_spatial_model_matrix), NULL))
   X_spatial_ipt = array(1, dim = c(n, ncol(data_spatial_model_matrix), n_t), dimnames = list(NULL, colnames(data_spatial_model_matrix), NULL))
   spline_spatial_model_matrix_proj_zpt = array(0, dim = c(n_z, ncol(spline_spatial_$X[,-1]), n_t))
   spline_spatial_model_matrix_ipt = array(spline_spatial_$X[,-1], dim = c(n, ncol(spline_spatial_$X[,-1]), n_t))
   Nij = array(0, dim = c(n_z, n_t))
-  
   
   ## map mesh to extrapolation grid. Assumes projection_df has the same spatial cell for all time-cells
   Proj <- inla.mesh.projector(mesh, loc = coordinates(proj_df_subset))
@@ -354,7 +354,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     Proj_Area = Proj_area,
     family = family,
     link = link,
-    pref_coef_bounds = c(-5, 5), ## perhaps make a user input, can be a difficult parameter to estimate
+    pref_coef_bounds = c(-10, 10), ## perhaps make a user input, can be a difficult parameter to estimate
     Nij = Nij,
     apply_pref = ifelse(apply_preferential_sampling, 1, 0),
     LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
