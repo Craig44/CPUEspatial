@@ -29,7 +29,7 @@ simulate_data <- function(obj, n_sims = 100, fixed_effect = 0, random_effect = 0
   } else {
     sim_data = sapply(1:n_sims, FUN = function(x){
       #print(x); 
-      this_sim = obj$simulate(full_pars)
+      this_sim = obj$simulate(MLE_pars)
       ## you can look at other information here if you want
       this_sim$y_i
     });
