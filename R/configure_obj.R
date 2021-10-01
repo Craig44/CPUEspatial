@@ -206,13 +206,15 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
-    spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    spline_ <-  mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline = ", length( spline_$smooth)))
     S_null <- spline_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(observed_df@data[,"area"]),max(observed_df@data[,"area"]),by = diff(range(observed_df@data[,"area"])) / 50)
-    forReport <- mgcv::PredictMat(spline_$smooth[[1]], data = data.frame(area = for_plotting))
+    for_plotting <- seq(min(observed_df@data[,response_variable_label]),max(observed_df@data[,response_variable_label]),by = diff(range(observed_df@data[,response_variable_label])) / 50)
+    plot_data = data.frame(x = for_plotting)
+    colnames(plot_data) = response_variable_label
+    forReport <- mgcv::PredictMat(spline_$smooth[[1]], data = plot_data)
     S_catchability_list[[1]] <- S_null
     S_catchability_reporting_list[[1]] <- forReport
   }
@@ -237,14 +239,17 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
     spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     
     S_null <- spline_spatial_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(observed_df@data[,"area"]),max(observed_df@data[,"area"]),by = diff(range(observed_df@data[,"area"])) / 50)
-    forReport <- mgcv::PredictMat(spline_spatial_$smooth[[1]], data = data.frame(area = for_plotting))
+    for_plotting <- seq(min(observed_df@data[,response_variable_label]),max(observed_df@data[,response_variable_label]),by = diff(range(observed_df@data[,response_variable_label])) / 50)
+    plot_data = data.frame(x = for_plotting)
+    colnames(plot_data) = response_variable_label
+    
+    forReport <- mgcv::PredictMat(spline_spatial_$smooth[[1]], data = plot_data)
     S_spatial_list[[1]] <- S_null
     S_spatial_reporting_list[[1]] <- forReport
   }
