@@ -157,7 +157,6 @@ check_tmb_convergence = function(obj, delta = 0.001) {
   
 #' TMB helper function
 #' @author C.Marsh
-#' @date 5/9/2018
 #' @description this function returns a list of factors used in the map argument of the MakeADFun function
 #' @param par_list a named list that you give to the par argument in the MakeADFun
 #' @param pars_to_exclude a vector of strings with names of parmeters you want to FIX in the objective object.

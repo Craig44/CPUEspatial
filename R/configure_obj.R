@@ -206,13 +206,15 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
-    spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    spline_ <-  mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline = ", length( spline_$smooth)))
     S_null <- spline_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(observed_df@data[,"area"]),max(observed_df@data[,"area"]),by = diff(range(observed_df@data[,"area"])) / 50)
-    forReport <- mgcv::PredictMat(spline_$smooth[[1]], data = data.frame(area = for_plotting))
+    for_plotting <- seq(min(observed_df@data[,response_variable_label]),max(observed_df@data[,response_variable_label]),by = diff(range(observed_df@data[,response_variable_label])) / 50)
+    plot_data = data.frame(x = for_plotting)
+    colnames(plot_data) = response_variable_label
+    forReport <- mgcv::PredictMat(spline_$smooth[[1]], data = plot_data)
     S_catchability_list[[1]] <- S_null
     S_catchability_reporting_list[[1]] <- forReport
   }
@@ -237,14 +239,17 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
     spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     
     S_null <- spline_spatial_$smooth[[1]]$S[[1]]
-    for_plotting <- seq(min(observed_df@data[,"area"]),max(observed_df@data[,"area"]),by = diff(range(observed_df@data[,"area"])) / 50)
-    forReport <- mgcv::PredictMat(spline_spatial_$smooth[[1]], data = data.frame(area = for_plotting))
+    for_plotting <- seq(min(observed_df@data[,response_variable_label]),max(observed_df@data[,response_variable_label]),by = diff(range(observed_df@data[,response_variable_label])) / 50)
+    plot_data = data.frame(x = for_plotting)
+    colnames(plot_data) = response_variable_label
+    
+    forReport <- mgcv::PredictMat(spline_spatial_$smooth[[1]], data = plot_data)
     S_spatial_list[[1]] <- S_null
     S_spatial_reporting_list[[1]] <- forReport
   }
@@ -271,12 +276,12 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
       stop(paste0("the object projection_raster_layer, needs to have the data values == 1, for each projection cell. Found sum(projection_raster_layer@data@values == 1) = ", sum(projection_raster_layer@data@values == 1) , " and n_z projection cells = ", n_z))
   }
   
+  
   X_spatial_proj_zpt = array(1, dim = c(n_z, ncol(data_spatial_model_matrix), n_t), dimnames = list(NULL, colnames(data_spatial_model_matrix), NULL))
   X_spatial_ipt = array(1, dim = c(n, ncol(data_spatial_model_matrix), n_t), dimnames = list(NULL, colnames(data_spatial_model_matrix), NULL))
   spline_spatial_model_matrix_proj_zpt = array(0, dim = c(n_z, ncol(spline_spatial_$X[,-1]), n_t))
   spline_spatial_model_matrix_ipt = array(spline_spatial_$X[,-1], dim = c(n, ncol(spline_spatial_$X[,-1]), n_t))
   Nij = array(0, dim = c(n_z, n_t))
-  
   
   ## map mesh to extrapolation grid. Assumes projection_df has the same spatial cell for all time-cells
   Proj <- inla.mesh.projector(mesh, loc = coordinates(proj_df_subset))
@@ -354,7 +359,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     Proj_Area = Proj_area,
     family = family,
     link = link,
-    pref_coef_bounds = c(-5, 5), ## perhaps make a user input, can be a difficult parameter to estimate
+    pref_coef_bounds = c(-10, 10), ## perhaps make a user input, can be a difficult parameter to estimate
     Nij = Nij,
     apply_pref = ifelse(apply_preferential_sampling, 1, 0),
     LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice

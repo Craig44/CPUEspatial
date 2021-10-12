@@ -35,7 +35,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
   if(!all(vars_needed %in% colnames(out_of_sample_df@data)))
     stop(paste0("out_of_sample_df: needs colnames ", paste(vars_needed, collapse = ", ")))
   ## original time-steps
-  original_time_steps = unique(observed_df@data[, time_variable_label])
+  original_time_steps = sort(unique(observed_df@data[, time_variable_label]))
   n_t = conf_obj$tmb_data$n_t
   ## build model matricies
   year_factor = factor(out_of_sample_df@data[, time_variable_label], levels = levels(factor(observed_df@data[,time_variable_label])))
