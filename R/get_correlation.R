@@ -10,26 +10,34 @@
 #' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 #' @export
 #' @importFrom raster rasterize
-#' @return: projection_df with a column called predicted_y which has all the spatial components plus the time_coeffecient
+#' @return: a list with the following elements
+#' \itemize{
+#'   \item samples_rasters list of raster layers for each time-step with the accumulated observations in each projection grid
+#'   \item proj_rasters list of raster layers for each time-step with the projected value
+#'   \item correlation_by_time_step Pearsons correlation between complete obs of the two raster layers by time-step
+#'   \item overall_correlation Pearsons correlation for complete obs over all time steps
+#' }
 get_correlation <- function(observed_df, projection_df, time_variable_label, proj_variable_label, projection_raster_layer) {
   time_variable = observed_df@data[,time_variable_label]
   time_levels = sort(unique(time_variable))
   n_t = length(unique(time_variable))
-  n_z = sum(projection_df@data[,time_variable_label] == time_levels[1])
-  Nij = array(NA, dim = c(n_z, n_t))
-  y_hat = array(NA, dim = c(n_z, n_t))
-  
+  n_z = length(projection_raster_layer$layer@data@values)
+  sample_raster = proj_raster = list()
+  correlation_by_time_step =  Nij = y_hat = vector();
+  ## for each year
   for(t in 1:n_t) {
     proj_df_subset <- subset(projection_df, subset = projection_df@data[,time_variable_label] == time_levels[t])
     data_df_subset <- subset(observed_df, subset = observed_df@data[,time_variable_label] == time_levels[t])
     data_df_subset@data$indicator = 1
     samples_count <- rasterize(data_df_subset, projection_raster_layer, field = data_df_subset$indicator, sum, na.rm = T)
     proj_count <- rasterize(proj_df_subset, projection_raster_layer, field = proj_df_subset@data[,proj_variable_label], sum, na.rm = T)
-    
-    Nij[,t] = samples_count$layer@data@values[projection_raster_layer@data@values == 1]
-    y_hat[which(!is.na(Nij[,t])),t] = proj_count$layer@data@values[which(!is.na(Nij[,t]))]
+    sample_raster[[t]] = samples_count
+    proj_raster[[t]] = proj_count
+    Nij = c(Nij, samples_count$layer@data@values)
+    y_hat = c(y_hat, proj_count$layer@data@values)
+    correlation_by_time_step[t] = cor(samples_count$layer@data@values, proj_count$layer@data@values, use = "pairwise.complete.obs")
   }
-  result = list(samples_per_cell = Nij, projected_value_per_cell = y_hat, pairwise_correlation = cor(as.vector(Nij), as.vector(y_hat), use = "pairwise.complete.obs"))
+  result = list(samples_rasters = sample_raster, proj_rasters = proj_raster, correlation_by_time_step = correlation_by_time_step, overall_correlation = cor(Nij, y_hat, use = "pairwise.complete.obs"))
   return(result)
 }
 
