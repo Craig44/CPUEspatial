@@ -17,6 +17,7 @@
 #'   \item correlation_by_time_step Pearsons correlation between complete obs of the two raster layers by time-step
 #'   \item overall_correlation Pearsons correlation for complete obs over all time steps
 #' }
+#' @details the overall correlation uses standardised values for a given year. if n = obs in a year and p = projected values in a year then this returns cor(n / sum(n), p / sum(p))
 #' @examples
 #'\dontrun{
 #' you can plot the layers side by side using the following R-code
@@ -32,7 +33,7 @@ get_correlation <- function(observed_df, projection_df, time_variable_label, pro
   n_t = length(unique(time_variable))
   n_z = length(projection_raster_layer$layer@data@values)
   sample_raster = proj_raster = list()
-  correlation_by_time_step =  Nij = y_hat = vector();
+  correlation_by_time_step =  nij_stand = y_hat_stand = vector();
   ## for each year
   for(t in 1:n_t) {
     proj_df_subset <- subset(projection_df, subset = projection_df@data[,time_variable_label] == time_levels[t])
@@ -42,11 +43,13 @@ get_correlation <- function(observed_df, projection_df, time_variable_label, pro
     proj_count <- rasterize(proj_df_subset, projection_raster_layer, field = proj_df_subset@data[,proj_variable_label], sum, na.rm = T)
     sample_raster[[t]] = samples_count
     proj_raster[[t]] = proj_count
-    Nij = c(Nij, samples_count$layer@data@values)
-    y_hat = c(y_hat, proj_count$layer@data@values)
+    nij_stand = c(nij_stand, samples_count$layer@data@values / sum(samples_count$layer@data@values, na.rm  =T))
+    ## standardised in each year
+    ## otherwise get correlations that
+    y_hat_stand = c(y_hat_stand, proj_count$layer@data@values/ sum(proj_count$layer@data@values, na.rm = T))
     correlation_by_time_step[t] = cor(samples_count$layer@data@values, proj_count$layer@data@values, use = "pairwise.complete.obs")
   }
-  result = list(samples_rasters = sample_raster, proj_rasters = proj_raster, correlation_by_time_step = correlation_by_time_step, overall_correlation = cor(Nij, y_hat, use = "pairwise.complete.obs"))
+  result = list(samples_rasters = sample_raster, proj_rasters = proj_raster, correlation_by_time_step = correlation_by_time_step, overall_correlation = cor(nij_stand, y_hat_stand, use = "pairwise.complete.obs"))
   return(result)
 }
 
