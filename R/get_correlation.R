@@ -17,6 +17,15 @@
 #'   \item correlation_by_time_step Pearsons correlation between complete obs of the two raster layers by time-step
 #'   \item overall_correlation Pearsons correlation for complete obs over all time steps
 #' }
+#' @examples
+#'\dontrun{
+#' you can plot the layers side by side using the following R-code
+#' corr_obj = get_correlation(...)
+#' plot for the first time-step
+#' par(mfrow = c(2,1))
+#' plot(corr_obj$samples_rasters[[1]])
+#' plot(proj_rasters$samples_rasters[[1]])
+#'}
 get_correlation <- function(observed_df, projection_df, time_variable_label, proj_variable_label, projection_raster_layer) {
   time_variable = observed_df@data[,time_variable_label]
   time_levels = sort(unique(time_variable))
