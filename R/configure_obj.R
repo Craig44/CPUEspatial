@@ -4,12 +4,6 @@
 #' given a data frame and some user defined settings will return an TMB object that represents either a GLM, or geo-statistical model.
 #' is implied in this model, otherwise you could just use the standard GLM approach. 
 #' pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, cv_pref), 
-#'  == 0: Not time-varying
-#'  == 1: mu_pref (est) & sd_pref (est), 
-#'  == 2: mu_pref (fixed)  & sd_pref(fixed)
-#'  == 3: mu_pref (est)  & sd_pref(fixed)
-#'  == 4: mu_pref (fixed)  & sd_pref(est)
-
 #' @param observed_df SpatialPointsDataFrame, which contains response variable and covariates for glmm analysis mut contain column 'area'
 #' @param projection_df SpatialPointsDataFrameneeds to have the same variable names (colnames) as observed_df. Should supply variable values for all projection cells over all time steps
 #' @param include_epsilon boolean time-varying spatial GF
@@ -27,11 +21,17 @@
 #' @param linear_basis 0 = apply triangulation sparse matrix approach, 1 = Nearest Neighbour
 #' @param apply_preferential_sampling whether to jointly model observation location 
 #' @param preference_model_type integer 0 = Dinsdale approach, 1 = LGCP lattice approach
-#' @param pref_hyper_distribution integer #specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref = N(mu_pref, sd_pref). See details for more information
+#' @param pref_hyper_distribution integer #specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, sd_pref). See details for more information
+#' \itemize{
+#'   \item 0: Not time-varying
+#'   \item 1: mu_pref (est) & sd_pref (est), 
+#'   \item 2: mu_pref (fixed)  & sd_pref(fixed),
+#'   \item 3: mu_pref (est)  & sd_pref(fixed),
+#'   \item 4: mu_pref (fixed)  & sd_pref(est)
+#' }
 #' @param logit_pref_hyper_prior_vals vector<double> specifing the mean and sd (note sd is estimated interanlly as ln_sd to constrain sd > 0, so this value is logged in the model). if estimated as specified by pref_hyper_distribution, these are the starting values, otherwise they are the values fixed during estimation
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
 #' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
-#' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
 #' @importFrom sp coordinates
 #' @importFrom INLA inla.mesh.projector inla.spde2.matern inla.spde.make.A
