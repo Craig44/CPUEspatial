@@ -51,6 +51,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   
   DATA_VECTOR( pref_coef_bounds );  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
   DATA_INTEGER( apply_pref );       // 0 = no, 1 = yes
+  DATA_INTEGER( hyper_prior_on_pref ) ;// 0 = no, 1 = yes
   DATA_ARRAY( Nij );                // number of observations in each each Proj cell dim[n_p, n_t]
   DATA_INTEGER( LCGP_approach );    // 0 Dinsdale approach, 1 = LGCP lattice approach
   
@@ -190,7 +191,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   pref_denom.setZero();
   spline_spatial_i.setZero();
   epsilon_vec.setZero();
-  vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
+  vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catchability 5 = spline spatial, 6 = pref coeffecient hyper prior
   nll.setZero();
   
   // transform preferential sampling coeffecients
@@ -198,13 +199,15 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   if(logit_pref_coef.size() == 1) {
     for(t = 0; t < n_t; ++t)
       pref_coef(t) = invlogit_general(logit_pref_coef(0), pref_coef_bounds(0), pref_coef_bounds(1));
+    if (hyper_prior_on_pref) 
+      nll(6) -= dnorm(logit_pref_coef(0), logit_pref_hyper_params(0), exp(logit_pref_hyper_params(1)));
   } else {
     for(t = 0; t < n_t; ++t) {
       pref_coef(t) = invlogit_general(logit_pref_coef(t), pref_coef_bounds(0), pref_coef_bounds(1));
-      nll(6) -= dnorm(logit_pref_coef(t), logit_pref_hyper_params(0), exp(logit_pref_hyper_params(1)));
+      if (hyper_prior_on_pref) 
+        nll(6) -= dnorm(logit_pref_coef(t), logit_pref_hyper_params(0), exp(logit_pref_hyper_params(1)));
     }
   }
-  
   
   // set some counters
   // Gaussian field stuff

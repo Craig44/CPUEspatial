@@ -21,13 +21,20 @@
 #' @param linear_basis 0 = apply triangulation sparse matrix approach, 1 = Nearest Neighbour
 #' @param apply_preferential_sampling whether to jointly model observation location 
 #' @param preference_model_type integer 0 = Dinsdale approach, 1 = LGCP lattice approach
-#' @param pref_hyper_distribution integer #specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, sd_pref). See details for more information
+#' @param pref_bounds vector or two values defining the bounds for the pref coeffecient
+#' @param pref_parameter_random is the preference coeffecient treated as a random effect or fixed effect. note if fixed effet the prior becomes a 'penalty'
+#' @param pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, sd_pref). See details for more information
 #' \itemize{
-#'   \item 0: Not time-varying
-#'   \item 1: mu_pref (est) & sd_pref (est), 
-#'   \item 2: mu_pref (fixed)  & sd_pref(fixed),
-#'   \item 3: mu_pref (est)  & sd_pref(fixed),
-#'   \item 4: mu_pref (fixed)  & sd_pref(est)
+#'   \item 0: Not time-varying no hyper prior
+#'   \item 1: Not Time-varying hyper prior mu_pref (est) & sd_pref (est), 
+#'   \item 2: Not Time-varying hyper prior  mu_pref (fixed)  & sd_pref(fixed),
+#'   \item 3: Not Time-varying hyper prior  mu_pref (est)  & sd_pref(fixed),
+#'   \item 4: Not Time-varying hyper prior  mu_pref (fixed)  & sd_pref(est),
+#'   \item 5: Time-varying mu_pref (fixed)  & sd_pref(est)
+#'   \item 6: Time-varying mu_pref (est) & sd_pref (est), 
+#'   \item 7: Time-varying mu_pref (fixed)  & sd_pref(fixed),
+#'   \item 8: Time-varying mu_pref (est)  & sd_pref(fixed),
+#'   \item 9: Time-varying mu_pref (fixed)  & sd_pref(est)
 #' }
 #' @param logit_pref_hyper_prior_vals vector<double> specifing the mean and sd (note sd is estimated interanlly as ln_sd to constrain sd > 0, so this value is logged in the model). if estimated as specified by pref_hyper_distribution, these are the starting values, otherwise they are the values fixed during estimation
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
@@ -43,7 +50,7 @@
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
 configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, epsilon_structure = "iid", response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none") {
+                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none", pref_bounds = c(-5,5), pref_parameter_random = FALSE) {
   Call = list()
   Call$func_call <- match.call()
   if(!trace_level %in% c("none", "low", "medium","high"))
@@ -60,6 +67,10 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     stop(paste0("link needs to be a value from 0 to 4, for a valid link function"))
   if(!epsilon_structure %in% c("iid", "ar1"))
     stop("epsilon_structure, needs to either be 'iid' or 'ar1'")
+  if(length(pref_bounds) != 2)
+    stop("pref_bounds needs to be of length 2, i.e. a lower and upper bound")
+  if(pref_bounds[1] >= pref_bounds[2])
+    stop("pref_bounds: lower bound can't be greater than or equal to upper bound.")
   set_up_dummy_proj = TRUE
   if(apply_preferential_sampling & preference_model_type == 1) {
     if(is.null(projection_raster_layer))
@@ -359,9 +370,10 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     Proj_Area = Proj_area,
     family = family,
     link = link,
-    pref_coef_bounds = c(-10, 10), ## perhaps make a user input, can be a difficult parameter to estimate
+    pref_coef_bounds = pref_bounds, ## perhaps make a user input, can be a difficult parameter to estimate
     Nij = Nij,
     apply_pref = ifelse(apply_preferential_sampling, 1, 0),
+    hyper_prior_on_pref = ifelse(pref_hyper_distribution == 0, 0, 1), ## Get TMB to apply a hyper prior on PS
     LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
     model_matrix = model_matrix,
     time_model_matrix = time_model_matrix,
@@ -415,7 +427,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     constrained_time_betas = rep(0, max(dim(tmb_data$time_model_matrix)[2] - 1,1)),
     ln_phi = 0,
     logit_pref_coef = logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]),
-    logit_pref_hyper_params = c(logit_pref_hyper_prior_vals[1], log(logit_pref_hyper_prior_vals[2])),
+    logit_pref_hyper_params = c(logit_pref_hyper_prior_vals[1], log(logit_pref_hyper_prior_vals[2])), ## second value is log(sigma) so unbounded
     lgcp_intercept = 0,
     ln_kappa_omega = log(sqrt(8) / dis_cor_0.1),#sqrt(8) / dis_cor_0.1,
     ln_tau_omega =  log(1/(sigma_guess * sqrt(4*pi * sqrt(8) / dis_cor_0.1^2))),
@@ -429,7 +441,8 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     gammas_spatial = rep(0,sum(tmb_data$Sdims_spatial)),  # Spline coefficients
     ln_lambda_spatial = rep(0,length(tmb_data$Sdims_spatial)) #Log spline penalization coefficients
   )
-  if(pref_hyper_distribution != 0)
+  ## time-varying TODO: future get users to add blocks rather than every year
+  if(pref_hyper_distribution %in% 5:9)
     params$logit_pref_coef =  rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)
   
   
@@ -465,17 +478,17 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     if(preference_model_type == 0)
       pars_to_fix = c(pars_to_fix, "lgcp_intercept")
     if(pref_hyper_distribution == 0) {
-      # not time-varying
+      # don't need a hyper prior fix the params
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
-    } else if(pref_hyper_distribution == 2) {
+    } else if(pref_hyper_distribution %in% c(2,7)) {
       ## both fixed
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
-    } else if (pref_hyper_distribution == 3) {
+    } else if (pref_hyper_distribution %in% c(3,8)) {
       ## estimate hyper mean
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
       vec_pars_to_adjust = c(vec_pars_to_adjust,"logit_pref_hyper_params")
       vec_elements_to_exclude = list(logit_pref_hyper_params = c(1))
-    } else if(pref_hyper_distribution == 4) {
+    } else if(pref_hyper_distribution %in% c(4, 9)) {
       ## estimate hyper sd
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
       vec_pars_to_adjust = c(vec_pars_to_adjust,"logit_pref_hyper_params")
@@ -484,8 +497,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   } else {
     pars_to_fix = c(pars_to_fix, "logit_pref_coef","lgcp_intercept", "logit_pref_hyper_params")
   }
-  
-  
+ 
   fixed_pars = list()
   if(length(pars_to_fix) > 0)
     fixed_pars = fix_pars(par_list = params, pars_to_exclude = pars_to_fix, vec_pars_to_adjust = vec_pars_to_adjust, vec_elements_to_exclude = vec_elements_to_exclude)
@@ -503,7 +515,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     random_pars = c(random_pars, "epsilon_input")
   if(include_omega)
     random_pars = c(random_pars, "omega_input")
-  if(apply_preferential_sampling & pref_hyper_distribution != 0)
+  if(apply_preferential_sampling & pref_parameter_random)
     random_pars = c(random_pars, "logit_pref_coef")
   
   obj <- MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)

@@ -25,7 +25,9 @@ configure_obj(
   pref_hyper_distribution = 0,
   logit_pref_hyper_prior_vals = c(0, 1),
   projection_raster_layer = NULL,
-  trace_level = "none"
+  trace_level = "none",
+  pref_bounds = c(-5, 5),
+  pref_parameter_random = FALSE
 )
 }
 \arguments{
@@ -63,14 +65,29 @@ configure_obj(
 
 \item{preference_model_type}{integer 0 = Dinsdale approach, 1 = LGCP lattice approach}
 
-\item{pref_hyper_distribution}{integer #specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref = N(mu_pref, sd_pref). See details for more information}
+\item{pref_hyper_distribution}{integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, sd_pref). See details for more information
+\itemize{
+  \item 0: Not time-varying no hyper prior
+  \item 1: Not Time-varying hyper prior mu_pref (est) & sd_pref (est), 
+  \item 2: Not Time-varying hyper prior  mu_pref (fixed)  & sd_pref(fixed),
+  \item 3: Not Time-varying hyper prior  mu_pref (est)  & sd_pref(fixed),
+  \item 4: Not Time-varying hyper prior  mu_pref (fixed)  & sd_pref(est),
+  \item 5: Time-varying mu_pref (fixed)  & sd_pref(est)
+  \item 6: Time-varying mu_pref (est) & sd_pref (est), 
+  \item 7: Time-varying mu_pref (fixed)  & sd_pref(fixed),
+  \item 8: Time-varying mu_pref (est)  & sd_pref(fixed),
+  \item 9: Time-varying mu_pref (fixed)  & sd_pref(est)
+}}
 
 \item{logit_pref_hyper_prior_vals}{vector<double> specifing the mean and sd (note sd is estimated interanlly as ln_sd to constrain sd > 0, so this value is logged in the model). if estimated as specified by pref_hyper_distribution, these are the starting values, otherwise they are the values fixed during estimation}
 
-\item{projection_raster_layer}{a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
-TODO add whether we want to use Nearest Neighbour approach NN.}
+\item{projection_raster_layer}{a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell}
 
 \item{trace_level}{'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation.}
+
+\item{pref_bounds}{vector or two values defining the bounds for the pref coeffecient}
+
+\item{pref_parameter_random}{is the preference coeffecient treated as a random effect or fixed effect. note if fixed effet the prior becomes a 'penalty'}
 }
 \value{
 : list of estimated objects and data objects
@@ -81,10 +98,5 @@ configure_obj
 \details{
 given a data frame and some user defined settings will return an TMB object that represents either a GLM, or geo-statistical model.
 is implied in this model, otherwise you could just use the standard GLM approach. 
-pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, cv_pref), 
- == 0: Not time-varying
- == 1: mu_pref (est) & sd_pref (est), 
- == 2: mu_pref (fixed)  & sd_pref(fixed)
- == 3: mu_pref (est)  & sd_pref(fixed)
- == 4: mu_pref (fixed)  & sd_pref(est)
+pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, cv_pref),
 }
