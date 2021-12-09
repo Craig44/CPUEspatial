@@ -18,9 +18,6 @@
 // (here it's ModelA)
 template <class Type>
 Type SpatialTemporalCPUE(objective_function<Type>* obj) {
-  using namespace R_inla;
-  using namespace density;
-  using namespace Eigen;
   // Dimensions
   DATA_INTEGER( n_i );         // Total number of observations
   DATA_INTEGER( n_t );         // Number of years
