@@ -31,6 +31,7 @@
 #' @param logit_pref_hyper_prior_vals vector<double> specifing the mean and sd (note sd is estimated interanlly as ln_sd to constrain sd > 0, so this value is logged in the model). if estimated as specified by pref_hyper_distribution, these are the starting values, otherwise they are the values fixed during estimation
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
 #' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
+#' @param pref_bounds lower and upper bounds
 #' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
 #' @importFrom sp coordinates
@@ -43,7 +44,7 @@
 #' @importFrom stats model.matrix rnorm sd terms terms.formula
 #' @return: list of estimated objects and data objects
 configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, epsilon_structure = "iid", response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none") {
+                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none", pref_bounds= c(-10, 10)) {
   Call = list()
   Call$func_call <- match.call()
   if(!trace_level %in% c("none", "low", "medium","high"))
@@ -359,7 +360,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     Proj_Area = Proj_area,
     family = family,
     link = link,
-    pref_coef_bounds = c(-10, 10), ## perhaps make a user input, can be a difficult parameter to estimate
+    pref_coef_bounds = pref_bounds, ## perhaps make a user input, can be a difficult parameter to estimate
     Nij = Nij,
     apply_pref = ifelse(apply_preferential_sampling, 1, 0),
     LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
