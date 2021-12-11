@@ -49,6 +49,8 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
 
 	// Preferential sampling
 	DATA_VECTOR(pref_coef_bounds);  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
+	DATA_VECTOR(kappa_bounds);  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
+	
 	//DATA_INTEGER(hyper_prior_on_pref);// 0 = no, 1 = yes
 	DATA_INTEGER(apply_pref);       // 0 = no, 1 = yes
 	DATA_ARRAY(Nij);                // number of observations in each each Proj cell dim[n_p, n_t]

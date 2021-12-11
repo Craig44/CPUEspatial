@@ -5,6 +5,7 @@
 #include "HelperFuns.hpp"
 #include "SpatialTemporalCPUE.hpp"
 #include "SpatialTemporalCPUENN.hpp"
+#include "SpatialTemporalCPUEVAST.hpp"
 
 template<class Type>
 Type objective_function<Type>::operator() () {
@@ -13,6 +14,8 @@ Type objective_function<Type>::operator() () {
     return SpatialTemporalCPUE(this);
   } else if(model == "SpatialTemporalCPUENN") {
     return SpatialTemporalCPUENN(this);
+  } else if(model == "SpatialTemporalCPUEVAST") {
+    return SpatialTemporalCPUEVAST(this);
   } else {
     error("Unknown model.");
   }

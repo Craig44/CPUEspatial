@@ -25,6 +25,8 @@ get_projection <- function(obj, data, projection_df, time_variable_label) {
       spatial_prediction =  MLE_report$time_betas[t] + MLE_report$omega_proj + data$X_spatial_proj_zpt[,,t] %*% spatial_betas + (data$Proj %*% MLE_report$epsilon_input[,t])  / MLE_report$tau_epsilon
     } else if (model_type == "SpatialTemporalCPUENN") {
       spatial_prediction =  MLE_report$time_betas[t] + MLE_report$omega_proj + data$X_spatial_proj_zpt[,,t] %*% spatial_betas + MLE_report$epsilon_input[data$index_proj_vertex + 1, t]
+    } else if (model_type == "SpatialTemporalCPUEVAST") {
+      spatial_prediction =  MLE_report$time_betas[t] + MLE_report$omega_proj + data$X_spatial_proj_zpt[,,t] %*% spatial_betas + MLE_report$epsilon_v[data$index_proj_vertex + 1, t]
     }
     projection_df@data$predicted_y[time_ndx] = inverse_link(spatial_prediction, data$link)
   }

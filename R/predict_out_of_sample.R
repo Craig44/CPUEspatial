@@ -152,8 +152,10 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
       if(conf_obj$tmb_data$omega_indicator) {
         if(linear_basis == 0) {
           this_eta = this_eta + A %*% this_rep$omega_input / this_rep$tau_omega
-        } else {
+        } else if(linear_basis == 1) {
           this_eta = this_eta + this_rep$omega_input[data_vertex_ndx]
+        } else if(linear_basis == 2) {
+          this_eta = this_eta + this_rep$omega_v[data_vertex_ndx]
         }
       }
       if(conf_obj$tmb_data$epsilon_indicator) {
@@ -161,8 +163,10 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
           this_eps = NULL
           if(linear_basis == 0) {
             this_eps = A %*% this_rep$epsilon_input[,t] / this_rep$tau_epsilon
-          } else {
-            this_eps = this_rep$epsilon_input[data_vertex_ndx, t]
+          } else if (linear_basis == 1) {
+            this_eps = this_rep$epsilon_input[data_vertex_ndx, t] 
+          } else if( linear_basis == 2) {
+            this_eps = this_rep$epsilon_v[data_vertex_ndx, t] 
           }
           obs_this_year = sum(year_ndx_for_each_obs[t,] != -99)
           if(obs_this_year != 0) {
@@ -186,8 +190,10 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
     if(conf_obj$tmb_data$omega_indicator) {
       if(linear_basis == 0) {
         this_eta = this_eta + A %*% this_rep$omega_input / this_rep$tau_omega
-      } else {
+      } else if(linear_basis == 1) {
         this_eta = this_eta + this_rep$omega_input[data_vertex_ndx]
+      } else if(linear_basis == 2) {
+        this_eta = this_eta + this_rep$omega_v[data_vertex_ndx]
       }
     }
     if(conf_obj$tmb_data$epsilon_indicator) {
@@ -195,8 +201,10 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
         this_eps = NULL
         if(linear_basis == 0) {
           this_eps = A %*% this_rep$epsilon_input[,t] / this_rep$tau_epsilon
-        } else {
-          this_eps = this_rep$epsilon_input[data_vertex_ndx, t]
+        } else if (linear_basis == 1) {
+          this_eps = this_rep$epsilon_input[data_vertex_ndx, t] 
+        } else if( linear_basis == 2) {
+          this_eps = this_rep$epsilon_v[data_vertex_ndx, t] 
         }
         obs_this_year = sum(year_ndx_for_each_obs[t,] != -99)
         if(obs_this_year != 0) {

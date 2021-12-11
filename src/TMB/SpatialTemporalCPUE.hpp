@@ -47,6 +47,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   DATA_ARRAY( X_spatial_proj_zpt );	// Spatial projection model matrix for preference stuff dimensions = [n_z, p_s, n_t]
   
   DATA_VECTOR( pref_coef_bounds );  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
+  DATA_VECTOR(kappa_bounds);  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
   DATA_INTEGER( apply_pref );       // 0 = no, 1 = yes
   DATA_ARRAY( Nij );                // number of observations in each each Proj cell dim[n_p, n_t]
   DATA_INTEGER( LCGP_approach );    // 0 Dinsdale approach, 1 = LGCP lattice approach

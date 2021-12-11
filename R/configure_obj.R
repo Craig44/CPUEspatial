@@ -32,6 +32,7 @@
 #' @param trace_level 'none' don't print any information, 'low' print steps in the function 'medium' print gradients of TMB optimisation, 'high' print parameter candidates as well as gradients during oprimisation. 
 #' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 #' @param pref_bounds lower and upper bounds
+#' @param kappa_bounds lower and upper bounds for kappa parameter
 #' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
 #' @importFrom sp coordinates
@@ -41,10 +42,10 @@
 #' @importFrom mgcv gam PredictMat
 #' @importFrom Matrix .bdiag
 #' @importFrom raster raster rasterize crs
-#' @importFrom stats model.matrix rnorm sd terms terms.formula
+#' @importFrom stats model.matrix rnorm sd terms terms.formula dist
 #' @return: list of estimated objects and data objects
 configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, epsilon_structure = "iid", response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none", pref_bounds= c(-10, 10)) {
+                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none", pref_bounds= c(-10, 10), kappa_bounds = NULL) {
   Call = list()
   Call$func_call <- match.call()
   if(!trace_level %in% c("none", "low", "medium","high"))
@@ -345,6 +346,11 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   if(trace_level != "none")
     print(paste0("Passed: projection model matrix construction"))
   
+  if(is.null(kappa_bounds)) {
+    Dist = stats::dist(mesh$loc)
+    kappa_bounds = c(sqrt(8)/max(Dist),  sqrt(8)/min(Dist)) # Range = nu*sqrt(8)/kappa
+  }
+  
   ## Set up TMB object.
   tmb_data <- list(
     model = "SpatialTemporalCPUE",
@@ -361,6 +367,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     family = family,
     link = link,
     pref_coef_bounds = pref_bounds, ## perhaps make a user input, can be a difficult parameter to estimate
+    kappa_bounds = kappa_bounds,
     Nij = Nij,
     apply_pref = ifelse(apply_preferential_sampling, 1, 0),
     LCGP_approach = preference_model_type, ## 0 = dinsdale, 1 = LGCP Lattice
@@ -396,11 +403,15 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     tmb_data$A = A
     tmb_data$Proj = P
     tmb_data$model = "SpatialTemporalCPUE"
-  } else {
+  } else if(linear_basis == 1) {
     tmb_data$index_proj_vertex = proj_vertex_ndx - 1 # R index -> C++ index
     tmb_data$index_data_vertex = data_vertex_ndx - 1 # R index -> C++ index
     tmb_data$model = "SpatialTemporalCPUENN"
     
+  } else if(linear_basis == 2) {
+    tmb_data$index_proj_vertex = proj_vertex_ndx - 1 # R index -> C++ index
+    tmb_data$index_data_vertex = data_vertex_ndx - 1 # R index -> C++ index
+    tmb_data$model = "SpatialTemporalCPUEVAST"
   }
   
   if(trace_level != "none")
@@ -430,6 +441,25 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     gammas_spatial = rep(0,sum(tmb_data$Sdims_spatial)),  # Spline coefficients
     ln_lambda_spatial = rep(0,length(tmb_data$Sdims_spatial)) #Log spline penalization coefficients
   )
+  params_vast = list(
+    betas = rep(0, ncol(tmb_data$model_matrix)),
+    constrained_spatial_betas = rep(0, max(tmb_data$spatial_constrained_coeff_ndx) + 1),
+    constrained_time_betas = rep(0, max(dim(tmb_data$time_model_matrix)[2] - 1,1)),
+    ln_phi = 0,
+    logit_pref_coef = logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]),
+    logit_pref_hyper_params = c(logit_pref_hyper_prior_vals[1], log(logit_pref_hyper_prior_vals[2])),
+    lgcp_intercept = 0,
+    logit_kappa = 0,#sqrt(8) / dis_cor_0.1,
+    omega_eta = 1,
+    epsilon_eta = 1,
+    trans_eps_rho = 0,
+    omega_input = rep(0,spde$n.spde),
+    epsilon_input = array(0,dim = c(spde$n.spde, tmb_data$n_t)),
+    gammas = rep(0,sum(tmb_data$Sdims)),  # Spline coefficients
+    ln_lambda = rep(0,length(tmb_data$Sdims)), #Log spline penalization coefficients
+    gammas_spatial = rep(0,sum(tmb_data$Sdims_spatial)),  # Spline coefficients
+    ln_lambda_spatial = rep(0,length(tmb_data$Sdims_spatial)) #Log spline penalization coefficients
+  )
   if(pref_hyper_distribution != 0)
     params$logit_pref_coef =  rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)
   
@@ -444,22 +474,42 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   }
   ## set which parameters are being estimated and which are held constant.drr
   pars_to_fix = NULL;
-  if(epsilon_structure == "iid")
-    pars_to_fix = c(pars_to_fix, "trans_eps_rho")
-  if(!include_epsilon)
-    pars_to_fix = c(pars_to_fix, "epsilon_input", "ln_kappa_epsilon", "ln_tau_epsilon")
-  if(!include_omega)
-    pars_to_fix = c(pars_to_fix, "omega_input", "ln_kappa_omega", "ln_tau_omega")
-  if(length(spatial_covariates) == 0)
-    pars_to_fix = c(pars_to_fix, "constrained_spatial_betas")
-  if(length(spline_catchability_covariates) == 0)
-    pars_to_fix = c(pars_to_fix, "ln_lambda", "gammas")
-  if(length(spline_spatial_covariates) == 0)
-    pars_to_fix = c(pars_to_fix, "ln_lambda_spatial", "gammas_spatial")
-  ## do we need to estimate a dispersion parameter
-  if(family %in% c(1,3)) ## binomial and Poisson
-    pars_to_fix = c(pars_to_fix, "ln_phi")
-  
+  if(linear_basis == 2) {
+    if(epsilon_structure == "iid")
+      pars_to_fix = c(pars_to_fix, "trans_eps_rho")
+    if(!include_epsilon & !include_omega)
+      pars_to_fix = c(pars_to_fix, "epsilon_input", "logit_kappa", "omega_input", "omega_eta", "epsilon_eta")
+    if(!include_omega)
+      pars_to_fix = c(pars_to_fix, "omega_input", "omega_eta")
+    if(!include_epsilon)
+      pars_to_fix = c(pars_to_fix, "epsilon_input", "epsilon_eta")
+    if(length(spatial_covariates) == 0)
+      pars_to_fix = c(pars_to_fix, "constrained_spatial_betas")
+    if(length(spline_catchability_covariates) == 0)
+      pars_to_fix = c(pars_to_fix, "ln_lambda", "gammas")
+    if(length(spline_spatial_covariates) == 0)
+      pars_to_fix = c(pars_to_fix, "ln_lambda_spatial", "gammas_spatial")
+    ## do we need to estimate a dispersion parameter
+    if(family %in% c(1,3)) ## binomial and Poisson
+      pars_to_fix = c(pars_to_fix, "ln_phi")
+  } else {
+    if(epsilon_structure == "iid")
+      pars_to_fix = c(pars_to_fix, "trans_eps_rho")
+    if(!include_epsilon)
+      pars_to_fix = c(pars_to_fix, "epsilon_input", "ln_kappa_epsilon", "ln_tau_epsilon")
+    if(!include_omega)
+      pars_to_fix = c(pars_to_fix, "omega_input", "ln_kappa_omega", "ln_tau_omega")
+    if(length(spatial_covariates) == 0)
+      pars_to_fix = c(pars_to_fix, "constrained_spatial_betas")
+    if(length(spline_catchability_covariates) == 0)
+      pars_to_fix = c(pars_to_fix, "ln_lambda", "gammas")
+    if(length(spline_spatial_covariates) == 0)
+      pars_to_fix = c(pars_to_fix, "ln_lambda_spatial", "gammas_spatial")
+    ## do we need to estimate a dispersion parameter
+    if(family %in% c(1,3)) ## binomial and Poisson
+      pars_to_fix = c(pars_to_fix, "ln_phi")
+  }
+
   vec_pars_to_adjust = NULL
   vec_elements_to_exclude = NULL
   if (apply_preferential_sampling) {
@@ -488,9 +538,13 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   
   
   fixed_pars = list()
-  if(length(pars_to_fix) > 0)
-    fixed_pars = fix_pars(par_list = params, pars_to_exclude = pars_to_fix, vec_pars_to_adjust = vec_pars_to_adjust, vec_elements_to_exclude = vec_elements_to_exclude)
-  
+  if(linear_basis == 2) {
+    if(length(pars_to_fix) > 0)
+      fixed_pars = fix_pars(par_list = params_vast, pars_to_exclude = pars_to_fix, vec_pars_to_adjust = vec_pars_to_adjust, vec_elements_to_exclude = vec_elements_to_exclude)
+  } else {
+    if(length(pars_to_fix) > 0)
+      fixed_pars = fix_pars(par_list = params, pars_to_exclude = pars_to_fix, vec_pars_to_adjust = vec_pars_to_adjust, vec_elements_to_exclude = vec_elements_to_exclude)
+  }
   
   ## compile model
   #compile(file.path("src","debug_standalone_version.cpp"))
@@ -507,7 +561,12 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   if(apply_preferential_sampling & pref_hyper_distribution != 0)
     random_pars = c(random_pars, "logit_pref_coef")
   
-  obj <- MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
+  obj = NULL;
+  if(linear_basis == 2) {
+    obj <- MakeADFun(tmb_data, params_vast, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
+  } else {
+    obj <- MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
+  }
   
   if(trace_level != "none")
     print(paste0("Passed: successfully built obj"))
