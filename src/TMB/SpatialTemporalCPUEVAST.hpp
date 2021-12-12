@@ -184,7 +184,11 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   pref_denom.setZero();
   spline_spatial_i.setZero();
   epsilon_vec.setZero();
+  omega_v.setZero();
   zero_verticies.setZero();
+  epsilon_proj.setZero();
+  spatial_proj.setZero();
+  omega_proj.setZero();
   epsilon_v.setZero();
   vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
@@ -227,10 +231,11 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
       }
     }
     omega_v = (omega_input.matrix() * mat_omega.transpose()) / exp(logtau);
-    REPORT(omega_v);
     // map omega to observation
     for(i = 0; i < n_i; ++i) 
       omega_i(i) = omega_v(index_data_vertex(i));
+    for (i = 0; i < n_p; ++i)
+      omega_proj(i) = omega_v(index_proj_vertex(i));
   }
   
   
@@ -293,7 +298,6 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
         }
       }
     }
-    REPORT(epsilon_v);
     SIMULATE{
       REPORT(epsilon_input);
     }
@@ -352,7 +356,7 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   // Numerator for preference log likelihood
   if(LCGP_approach == 0) {
     for(i = 0; i < n_i; ++i) {
-      pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
+      pref_numerator(t_i(i)) += betas(0) + spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
     }
   }
   // Systematic Component
@@ -420,12 +424,11 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   // Projections
   // time-varying components
   
-  for (i = 0; i < n_p; ++i)
-    omega_proj(i) = omega_v(index_proj_vertex(i));
+  
   for(t = 0; t < n_t; ++t) {
     for (i = 0; i < n_p; ++i)
       epsilon_proj(i) = epsilon_v(index_proj_vertex(i), t);
-    spatial_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + epsilon_proj;
+    spatial_proj = betas(0) + X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + epsilon_proj;
     if (spline_flag(1) == 1)
       spatial_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
     
@@ -493,6 +496,8 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   REPORT( spatial_covariate_i );
   REPORT( spline_spatial_i );
   REPORT( omega_proj );
+  REPORT(omega_v);
+  REPORT(epsilon_v);
   
   REPORT( phi );
   REPORT( mu );

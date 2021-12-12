@@ -316,7 +316,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
 	for (i = 0; i < n_i; ++i) {
 		omega_i(i) = omega_input(index_data_vertex(i)) / tau_omega;
 		if (LCGP_approach == 0)
-			pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
+			pref_numerator(t_i(i)) += betas(0) + spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
 	}
 	// Systematic Component
 	vector<Type> eta = model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_spatial_i + omega_i + epsilon_i;
@@ -390,7 +390,7 @@ Type SpatialTemporalCPUENN(objective_function<Type>* obj) {
 		for (i = 0; i < n_p; ++i)
 			epsilon_proj(i) = epsilon_input(index_proj_vertex(i), t) / tau_epsilon;
 
-		spatial_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + epsilon_proj;
+		spatial_proj = betas(0) + X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + epsilon_proj;
 		if (spline_flag(1) == 1)
 			spatial_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
 
