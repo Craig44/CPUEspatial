@@ -4,7 +4,8 @@
 #' given a data frame and some user defined settings will return an TMB object that represents either a GLM, or geo-statistical model.
 #' is implied in this model, otherwise you could just use the standard GLM approach. 
 #' pref_hyper_distribution integer specifies whether preference coeffecient (the logit transformed parameter) is time-varying (and thus treated as random effect) if time-varying pref, logit_pref ~ N(mu_pref, cv_pref), 
-#'  == 0: Not time-varying
+#'  == 0: Not time-varying (estimated)
+#'  == < 0: Not time-varying (Fixed). Used for profiling, diagnosing identfiability
 #'  == 1: mu_pref (est) & sd_pref (est), 
 #'  == 2: mu_pref (fixed)  & sd_pref(fixed)
 #'  == 3: mu_pref (est)  & sd_pref(fixed)
@@ -33,6 +34,7 @@
 #' @param projection_raster_layer a RasterLayer object only required if apply_preferential_sampling = TRUE, and preference_model_type == 1. Should be the same resolution as projection_df. Used to collate sample locations. The observed_df slot should have vaules 0 = cell not in projection grid or 1 = active projection cell
 #' @param pref_bounds lower and upper bounds
 #' @param kappa_bounds lower and upper bounds for kappa parameter
+#' @param init_vals list of of parameter values passed to tmb::MakeADFun, useful for investigating different starting values.
 #' TODO add whether we want to use Nearest Neighbour approach NN.
 #' @export
 #' @importFrom sp coordinates
@@ -45,7 +47,7 @@
 #' @importFrom stats model.matrix rnorm sd terms terms.formula dist
 #' @return: list of estimated objects and data objects
 configure_obj = function(observed_df, projection_df, mesh, family, link, include_omega, include_epsilon, epsilon_structure = "iid", response_variable_label, time_variable_label, catchability_covariates = NULL, spatial_covariates = NULL, spline_catchability_covariates = NULL,
-                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none", pref_bounds= c(-10, 10), kappa_bounds = NULL) {
+                         spline_spatial_covariates = NULL, linear_basis = 0, apply_preferential_sampling = FALSE, preference_model_type = 1, pref_hyper_distribution = 0, logit_pref_hyper_prior_vals = c(0,1), projection_raster_layer = NULL, trace_level = "none", pref_bounds= c(-10, 10), kappa_bounds = NULL, init_vals = NULL) {
   Call = list()
   Call$func_call <- match.call()
   if(!trace_level %in% c("none", "low", "medium","high"))
@@ -109,8 +111,9 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   time_variable = observed_df@data[,time_variable_label]
   if(class(time_variable) != "integer") 
     stop(paste0("time_variable_name needs to be an integer this can be achieved by as.integer(observed_df@data$", time_variable_label,")"))
-  
-  time_levels = sort(unique(time_variable))
+    ## get some index
+  time_levels = min(time_variable):max(time_variable) 
+  n_t = length(time_levels)
   
   if(length(time_levels) < 2) 
     stop(paste0("Need at least two time-steps to run this type of model, found ", length(time_levels)))
@@ -122,8 +125,8 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   A = inla.spde.make.A(mesh, loc = cbind(coordinates(observed_df[, 1]), coordinates(observed_df[, 2])))
   ## Create Sparse Matern objects to pass to TMB
   spde = inla.spde2.matern(mesh, alpha = 2)
-  ## get some index
-  n_t = length(unique(time_variable))
+
+  
   # number of vertices ie. random effects for each GF
   n_v = mesh$n
   n = nrow(observed_df)
@@ -460,7 +463,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     gammas_spatial = rep(0,sum(tmb_data$Sdims_spatial)),  # Spline coefficients
     ln_lambda_spatial = rep(0,length(tmb_data$Sdims_spatial)) #Log spline penalization coefficients
   )
-  if(pref_hyper_distribution != 0)
+  if(pref_hyper_distribution > 0)
     params$logit_pref_coef =  rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)
   
   
@@ -515,7 +518,10 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   if (apply_preferential_sampling) {
     if(preference_model_type == 0)
       pars_to_fix = c(pars_to_fix, "lgcp_intercept")
-    if(pref_hyper_distribution == 0) {
+    if(pref_hyper_distribution < 0) {
+      # not time-varying
+      pars_to_fix = c(pars_to_fix, "logit_pref_coef", "logit_pref_hyper_params")
+    } else if(pref_hyper_distribution == 0) {
       # not time-varying
       pars_to_fix = c(pars_to_fix, "logit_pref_hyper_params")
     } else if(pref_hyper_distribution == 2) {
@@ -550,7 +556,6 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   #compile(file.path("src","debug_standalone_version.cpp"))
   #file.exists(file.path("src","debug_standalone_version.dll"))
   #dyn.load(dynlib(file.path("src","debug_standalone_version")))
-  obj = NULL
   ## create ob
   to_be_silent = ifelse(trace_level == "none", TRUE, FALSE)
   random_pars = NULL
@@ -562,17 +567,39 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     random_pars = c(random_pars, "logit_pref_coef")
   
   obj = NULL;
+  tmb_pars = NULL
   if(linear_basis == 2) {
-    obj <- MakeADFun(tmb_data, params_vast, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
+	tmb_pars = params_vast
+    if(!is.null(init_vals)) {
+      if(!all(unique(names(init_vals)) %in% unique(names(params_vast)))) {
+        stop(paste0("init_vals: doesn't have all the parameter labels expected. expected ", paste(unique(names(params_vast)), collapse = "\n")))
+      } else {
+        params_vast = init_vals
+      }
+    }
+    obj <- tryCatch(expr = MakeADFun(tmb_data, params_vast, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent), error = function(e){e})
+    if(inherits(obj, "error")) {
+      stop("An error occured in MakeADFun, probably and incompatiability between data and parameters")
+    }
+	
   } else {
-    obj <- MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent)
+  	tmb_pars = params
+    if(!all(unique(names(init_vals)) %in% unique(names(params)))) {
+      stop(paste0("init_vals: doesn't have all the parameter labels expected. expected ", paste(unique(names(params)), collapse = "\n")))
+    } else {
+      params = init_vals
+    }
+    obj <- tryCatch(expr = MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent), error = function(e){e})
+    if(inherits(obj, "error")) { 
+      stop("An error occured in MakeADFun, probably and incompatiability between data and parameters")
+    }
   }
   
   if(trace_level != "none")
     print(paste0("Passed: successfully built obj"))
   Call$link = link
   Call$family = family
-  return(list(obj = obj, tmb_pars = params, tmb_data = tmb_data, Call = Call))
+  return(list(obj = obj, tmb_pars = tmb_pars, tmb_data = tmb_data, Call = Call))
 }
 
 

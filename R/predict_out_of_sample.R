@@ -82,7 +82,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
     spline_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
     S_null <- spline_$smooth[[1]]$S[[1]]
     S_catchability_list[[1]] <- S_null
@@ -97,8 +97,8 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
-    spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    spline_spatial_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
     S_null <- spline_spatial_$smooth[[1]]$S[[1]]
     S_spatial_list[[1]] <- S_null
   }

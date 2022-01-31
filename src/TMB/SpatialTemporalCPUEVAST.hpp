@@ -156,7 +156,9 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   Type phi = exp(ln_phi); 
   Type eps_rho =  trans_eps_rho / sqrt(1.0 + pow(trans_eps_rho, 2));
   Type kappa = invlogit_general(logit_kappa, kappa_bounds(0), kappa_bounds(1));
-  
+
+  vector<Type> omega_transformed(n_v);                          // temp vector
+  array<Type> epsilon_transformed(n_v, n_t);                    // temp vector
   
   vector<Type> epsilon_vec(n_v);                                // temp vector
   vector<Type> spatial_Xbeta(n_i);
@@ -180,6 +182,7 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   vector<Type> mu(n_i);
   vector<Type> zero_verticies(n_v);
   SparseMatrix<Type> S_i; 
+  // populate with zeros
   pref_numerator.setZero();
   pref_denom.setZero();
   spline_spatial_i.setZero();
@@ -190,6 +193,7 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   spatial_proj.setZero();
   omega_proj.setZero();
   epsilon_v.setZero();
+  omega_i.setZero();
   vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
   
@@ -362,6 +366,7 @@ Type SpatialTemporalCPUEVAST(objective_function<Type>* obj) {
   // Systematic Component
   vector<Type> eta =  model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_spatial_i + omega_i + epsilon_i;
   
+  // add catchability cubic splines
   if (spline_flag(0) == 1)
     eta += spline_model_matrix * gammas;
   

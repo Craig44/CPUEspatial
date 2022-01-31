@@ -187,6 +187,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   pref_numerator.setZero();
   pref_denom.setZero();
   spline_spatial_i.setZero();
+  omega_i.setZero();
+  epsilon_i.setZero();
   epsilon_vec.setZero();
   vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catcspatialility 5 = spline spatial, 6 = pref prior (if time-varying)
   nll.setZero();
