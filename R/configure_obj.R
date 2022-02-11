@@ -463,9 +463,10 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     gammas_spatial = rep(0,sum(tmb_data$Sdims_spatial)),  # Spline coefficients
     ln_lambda_spatial = rep(0,length(tmb_data$Sdims_spatial)) #Log spline penalization coefficients
   )
-  if(pref_hyper_distribution > 0)
+  if(pref_hyper_distribution > 0) {
     params$logit_pref_coef =  rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)
-  
+	params_vast$logit_pref_coef =  rep(logit_general(0, tmb_data$pref_coef_bounds[1], tmb_data$pref_coef_bounds[2]), n_t)
+  }
   
   if(trace_level != "none")
     print(paste0("Passed: TMB parameter list construction"))
@@ -584,11 +585,13 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
 	
   } else {
   	tmb_pars = params
-    if(!all(unique(names(init_vals)) %in% unique(names(params)))) {
-      stop(paste0("init_vals: doesn't have all the parameter labels expected. expected ", paste(unique(names(params)), collapse = "\n")))
-    } else {
-      params = init_vals
-    }
+	if(!is.null(init_vals)) {
+	  if(!all(unique(names(init_vals)) %in% unique(names(params)))) {
+		stop(paste0("init_vals: doesn't have all the parameter labels expected. expected ", paste(unique(names(params)), collapse = "\n")))
+	  } else {
+		params = init_vals
+	  }
+	}
     obj <- tryCatch(expr = MakeADFun(tmb_data, params, random = random_pars, map = fixed_pars, DLL = "CPUEspatial_TMBExports", method = "nlminb", hessian = T, silent = to_be_silent), error = function(e){e})
     if(inherits(obj, "error")) { 
       stop("An error occured in MakeADFun, probably and incompatiability between data and parameters")

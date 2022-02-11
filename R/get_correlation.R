@@ -42,8 +42,8 @@ get_correlation <- function(observed_df, projection_df, time_variable_label, pro
     proj_count <- rasterize(proj_df_subset, projection_raster_layer, field = proj_df_subset@data[,proj_variable_label], sum, na.rm = T)
     sample_raster[[t]] = samples_count
     proj_raster[[t]] = proj_count
-    Nij = c(Nij, samples_count$layer@data@values)
-    y_hat = c(y_hat, proj_count$layer@data@values)
+    Nij = c(Nij, samples_count$layer@data@values / mean(samples_count$layer@data@values, na.rm = T))
+    y_hat = c(y_hat, proj_count$layer@data@values / mean(proj_count$layer@data@values, na.rm = T))
     correlation_by_time_step[t] = cor(samples_count$layer@data@values, proj_count$layer@data@values, use = "pairwise.complete.obs")
   }
   result = list(samples_rasters = sample_raster, proj_rasters = proj_raster, correlation_by_time_step = correlation_by_time_step, overall_correlation = cor(Nij, y_hat, use = "pairwise.complete.obs"))
