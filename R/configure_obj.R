@@ -268,6 +268,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   S_spatial_dims <- unlist(lapply(S_spatial_list, nrow)) # Find dimension of each S
   S_spatial_design_matrix <- .bdiag(S_spatial_reporting_list)
   
+  auxillary_objects = list(splinereportinglist = S_catchability_reporting_list, splinespatialreportinglist = S_spatial_reporting_list)
   
   if(trace_level != "none")
     print(paste0("Passed: model matrix configurations and spline configurations"))
@@ -602,7 +603,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     print(paste0("Passed: successfully built obj"))
   Call$link = link
   Call$family = family
-  return(list(obj = obj, tmb_pars = tmb_pars, tmb_data = tmb_data, Call = Call))
+  return(list(obj = obj, tmb_pars = tmb_pars, tmb_data = tmb_data, Call = Call, auxillary_objects = auxillary_objects))
 }
 
 
