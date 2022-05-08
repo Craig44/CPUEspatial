@@ -14,7 +14,8 @@
 #' \itemize{
 #'   \item samples_rasters list of raster layers for each time-step with the accumulated observations in each projection grid
 #'   \item proj_rasters list of raster layers for each time-step with the projected value
-#'   \item correlation_by_time_step Pearsons correlation between complete obs of the two raster layers by time-step
+#'   \item correlation_by_time_step Pearsons correlation between complete obs of the two raster layers by time-step. non-sampled areas not included
+#'   \item correlation_by_time_step_alt Pearsons correlation where non-sampled cells are set = 0 and used in correlation.
 #'   \item overall_correlation Pearsons correlation for complete obs over all time steps
 #' }
 #' @examples
@@ -29,10 +30,11 @@
 get_correlation <- function(observed_df, projection_df, time_variable_label, proj_variable_label, projection_raster_layer) {
   time_variable = observed_df@data[,time_variable_label]
   time_levels = sort(unique(time_variable))
+  time_levels = min(time_levels):max(time_levels)
   n_t = length(unique(time_variable))
   n_z = length(projection_raster_layer$layer@data@values)
   sample_raster = proj_raster = list()
-  correlation_by_time_step =  Nij = y_hat = vector();
+  correlation_by_time_step = correlation_by_time_step_alt = Nij = y_hat = Nij_alt = y_hat_alt = vector();
   ## for each year
   for(t in 1:n_t) {
     proj_df_subset <- subset(projection_df, subset = projection_df@data[,time_variable_label] == time_levels[t])
@@ -45,8 +47,12 @@ get_correlation <- function(observed_df, projection_df, time_variable_label, pro
     Nij = c(Nij, samples_count$layer@data@values / mean(samples_count$layer@data@values, na.rm = T))
     y_hat = c(y_hat, proj_count$layer@data@values / mean(proj_count$layer@data@values, na.rm = T))
     correlation_by_time_step[t] = cor(samples_count$layer@data@values, proj_count$layer@data@values, use = "pairwise.complete.obs")
+    ## include correlation with non-sampled cells
+    obs_with_zero = samples_count$layer@data@values
+    obs_with_zero[is.na(obs_with_zero)] = 0
+    correlation_by_time_step_alt[t] = cor(obs_with_zero, proj_count$layer@data@values, use = "pairwise.complete.obs")
   }
-  result = list(samples_rasters = sample_raster, proj_rasters = proj_raster, correlation_by_time_step = correlation_by_time_step, overall_correlation = cor(Nij, y_hat, use = "pairwise.complete.obs"))
+  result = list(samples_rasters = sample_raster, proj_rasters = proj_raster, correlation_by_time_step_alt = correlation_by_time_step_alt, correlation_by_time_step = correlation_by_time_step, overall_correlation = cor(Nij, y_hat, use = "pairwise.complete.obs"))
   return(result)
 }
 

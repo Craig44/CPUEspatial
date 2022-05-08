@@ -273,8 +273,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     for( i = 0;i < Sdims.size(); i++){
       int m_i = Sdims(i);
       gamma_i = gammas.segment(k,m_i);        // Recover betai
-      S_i = S.block(k,k,m_i,m_i);      // Recover Si
-      nll(4) -= Type(0.5) * m_i * ln_lambda(i) - 0.5 * lambda(i) * GMRF(S_i).Quadform(gamma_i);
+      S_i = lambda(i) * S.block(k,k,m_i,m_i);      // Recover Si
+      nll(4) -= Type(0.5) * m_i * ln_lambda(i) - 0.5 * GMRF(S_i).Quadform(gamma_i);
       k += m_i;
     }
     vector<Type> splineForReport = designMatrixForReport * gammas;
@@ -290,8 +290,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     for( i = 0;i < Sdims_spatial.size(); i++){
       int m_i = Sdims_spatial(i);
       gamma_spatial_i = gammas_spatial.segment(k,m_i);        // Recover betai
-      S_i = S_spatial.block(k,k,m_i,m_i);      // Recover Si
-      nll(5) -= Type(0.5) * m_i * ln_lambda_spatial(i) - 0.5 * lambda_spatial(i) * GMRF(S_i).Quadform(gamma_spatial_i);
+      S_i = lambda_spatial(i) * S_spatial.block(k,k,m_i,m_i);      // Recover Si
+      nll(5) -= Type(0.5) * m_i * ln_lambda_spatial(i) - 0.5 *  GMRF(S_i).Quadform(gamma_spatial_i);
       k += m_i;
     }
     vector<Type> splineForReport_spatial = designMatrixForReport_spatial * gammas_spatial;

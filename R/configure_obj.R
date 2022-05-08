@@ -193,12 +193,12 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   S_spatial_list <- list()
   S_spatial_reporting_list <- list()
   if(length(spline_catchability_covariates) > 0) {
-    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + ")))
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'ts')",collapse = " + ")))
     spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     #attach(spline_)
     if(trace_level == "high") {
       print(paste0("length spline = ", length( spline_$smooth)))
-      print(paste0("formula = mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + ")))
+      print(paste0("formula = mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'ts')",collapse = " + ")))
     }
     
     for(i in 1:length(spline_$smooth)) {
@@ -211,7 +211,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'ts')"))
     spline_ <-  mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline = ", length( spline_$smooth)))
@@ -228,10 +228,10 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     print(paste0("Passed catchability spline section"))
   
   if(length(spline_spatial_covariates) > 0) {
-    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'ts')",collapse = " + ")))
     spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high") {
-      print(paste0("formula = mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
+      print(paste0("formula = mgcv::gam(",response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'ts')",collapse = " + ")))
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
     }
     for(i in 1:length(spline_spatial_$smooth)) {
@@ -244,7 +244,7 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'ts')"))
     spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
     if(trace_level == "high")
       print(paste0("length spline_spatial_ = ", length( spline_spatial_$smooth)))
@@ -278,8 +278,10 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
   # number of spatial cells in projection matrix
   n_z = nrow(proj_df_subset)
   if(!set_up_dummy_proj) {
-    if(sum(projection_raster_layer@data@values == 1) != n_z)
-      stop(paste0("the object projection_raster_layer, needs to have the data values == 1, for each projection cell. Found sum(projection_raster_layer@data@values == 1) = ", sum(projection_raster_layer@data@values == 1) , " and n_z projection cells = ", n_z))
+    if(apply_preferential_sampling & preference_model_type == 1) {
+      if(sum(projection_raster_layer@data@values == 1) != n_z)
+        stop(paste0("the object projection_raster_layer, needs to have the data values == 1, for each projection cell. Found sum(projection_raster_layer@data@values == 1) = ", sum(projection_raster_layer@data@values == 1) , " and n_z projection cells = ", n_z))
+    }
   }
   
   
@@ -567,6 +569,11 @@ configure_obj = function(observed_df, projection_df, mesh, family, link, include
     random_pars = c(random_pars, "omega_input")
   if(apply_preferential_sampling & pref_hyper_distribution != 0)
     random_pars = c(random_pars, "logit_pref_coef")
+  
+  if(length(spline_catchability_covariates) != 0)
+    random_pars = c(random_pars, "gammas")
+  if(length(spline_spatial_covariates) == 0)
+    random_pars = c(random_pars, "gammas_spatial")
   
   obj = NULL;
   tmb_pars = NULL

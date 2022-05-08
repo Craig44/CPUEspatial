@@ -73,7 +73,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
   S_catchability_list <- list()
   S_spatial_list <- list()
   if(length(spline_catchability_covariates) > 0) {
-    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + ")))
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'ts')",collapse = " + ")))
     spline_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
     
     for(i in 1:length(spline_$smooth)) {
@@ -82,14 +82,14 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'ts')"))
     spline_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
     S_null <- spline_$smooth[[1]]$S[[1]]
     S_catchability_list[[1]] <- S_null
   }
 
   if(length(spline_spatial_covariates) > 0) {
-    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'ts')",collapse = " + ")))
     spline_spatial_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
     for(i in 1:length(spline_spatial_$smooth)) {
       S_null <- spline_spatial_$smooth[[i]]$S[[1]]
@@ -97,7 +97,7 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
     }
   } else {
     ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'cs')"))
+    ff = formula(paste0(response_variable_label," ~ s(",response_variable_label,", bs = 'ts')"))
     spline_spatial_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
     S_null <- spline_spatial_$smooth[[1]]$S[[1]]
     S_spatial_list[[1]] <- S_null
