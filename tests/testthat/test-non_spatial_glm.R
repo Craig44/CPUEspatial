@@ -128,6 +128,7 @@ test_that("normal_glm", {
 })
 
 #' A non spatial GLM model with  normal - log response variable
+#' Technically not a lognormal
 test_that("lognormal_glm", {
   load(system.file("testdata", "non_spatial_glm.RData",package="CPUEspatial"))
   std_dev = 0.15
