@@ -18,6 +18,7 @@
 #' @importFrom stats formula
 #' @importFrom TMB sdreport
 #' @importFrom MASS mvrnorm
+#' @importFrom mgcv gam 
 #' @export
 predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, simulate = FALSE, n_sims = 100) {
   if(class(out_of_sample_df) != "SpatialPointsDataFrame")
@@ -67,47 +68,25 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
   
   ## model matrix for spline covariates
   ## Spline based stuff
-  spline_ <- NULL
-  spline_spatial_ <- NULL
-  for_plotting <- NULL
-  S_catchability_list <- list()
-  S_spatial_list <- list()
+  spline_prediction_matrix <- NULL
+  spline_spatial_prediction_matrix <- NULL
   if(length(spline_catchability_covariates) > 0) {
-    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'cs')",collapse = " + ")))
-    spline_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
-    
-    for(i in 1:length(spline_$smooth)) {
-      S_null <- spline_$smooth[[i]]$S[[1]]
-      S_catchability_list[[i]] <- S_null
+    ## get the original structure i.e. basis locations
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_catchability_covariates,", bs = 'ts')",collapse = " + ")))
+    original_spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
+    for(k in 1:length(original_spline_$smooth)) {
+      spline_prediction_matrix <- cbind(spline_prediction_matrix, PredictMat(original_spline_$smooth[[k]], out_of_sample_df@data))
     }
-  } else {
-    ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
-    spline_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
-    S_null <- spline_$smooth[[1]]$S[[1]]
-    S_catchability_list[[1]] <- S_null
   }
-
   if(length(spline_spatial_covariates) > 0) {
-    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'cs')",collapse = " + ")))
-    spline_spatial_ <- mgcv::gam(ff, data = out_of_sample_df@data, fit = F)
-    for(i in 1:length(spline_spatial_$smooth)) {
-      S_null <- spline_spatial_$smooth[[i]]$S[[1]]
-      S_spatial_list[[i]] <- S_null
+    ## get the original structure i.e. basis locations
+    ff = formula(paste0(response_variable_label," ~ ", paste("s(", spline_spatial_covariates,", bs = 'ts')",collapse = " + ")))
+    original_spatial_spline_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
+    for(k in 1:length(original_spatial_spline_$smooth)) {
+      spline_spatial_prediction_matrix <- cbind(spline_spatial_prediction_matrix, PredictMat(original_spatial_spline_$smooth[[k]], out_of_sample_df@data))
     }
-  } else {
-    ## create a dummy variable
-    ff = formula(paste0(response_variable_label," ~ s(area, bs = 'cs')"))
-    spline_spatial_ <- mgcv::gam(ff, data = observed_df@data, fit = F)
-    S_null <- spline_spatial_$smooth[[1]]$S[[1]]
-    S_spatial_list[[1]] <- S_null
   }
 
-  S_catchability_combined <- .bdiag(S_catchability_list)         # join S's in sparse matrix
-  S_catchability_dims <- unlist(lapply(S_catchability_list, nrow)) # Find dimension of each S
-  S_spatial_combined <- .bdiag(S_spatial_list)         # join S's in sparse matrix
-  S_spatial_dims <- unlist(lapply(S_spatial_list, nrow)) # Find dimension of each S
-  
   ## build mesh interpolation
   A = inla.spde.make.A(mesh, loc = cbind(coordinates(out_of_sample_df[, 1]), coordinates(out_of_sample_df[, 2])))
   data_vertex_ndx = nn2(mesh$loc[,c(1,2)], coordinates(out_of_sample_df), k = 1)$nn.idx
@@ -145,24 +124,29 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
     for(j in 1:n_sims) {
       this_rep = conf_obj$obj$report(sim_pars[j, ])
       this_eta = time_model_matrix %*%  this_rep$time_betas +  data_spatial_model_matrix %*% this_rep$spatial_betas + model_matrix %*% this_rep$betas
-      if(!is.null(spline_spatial_covariates)) 
-        this_eta = this_eta + spline_spatial_$X[,-1] %*% this_rep$gammas_spatial 
-      if(!is.null(spline_catchability_covariates))
-        this_eta = this_eta + spline_$X[,-1] %*% this_rep$gammas 
+      if(length(spline_spatial_covariates) > 0) 
+        this_eta = this_eta + spline_spatial_prediction_matrix %*% this_rep$gammas_spatial 
+      if(length(spline_catchability_covariates) > 0)
+        this_eta = this_eta + spline_prediction_matrix %*% this_rep$gammas 
       if(conf_obj$tmb_data$omega_indicator) {
         if(linear_basis == 0) {
           this_eta = this_eta + A %*% this_rep$omega_input / this_rep$tau_omega
-        } else {
+        } else if(linear_basis == 1) {
           this_eta = this_eta + this_rep$omega_input[data_vertex_ndx]
+        } else if(linear_basis == 2) {
+          this_eta = this_eta + this_rep$omega_v[data_vertex_ndx]
         }
       }
+
       if(conf_obj$tmb_data$epsilon_indicator) {
         for(t in 1:ncol(this_rep$epsilon_input)) {
           this_eps = NULL
           if(linear_basis == 0) {
             this_eps = A %*% this_rep$epsilon_input[,t] / this_rep$tau_epsilon
-          } else {
-            this_eps = this_rep$epsilon_input[data_vertex_ndx, t]
+          } else if (linear_basis == 1) {
+            this_eps = this_rep$epsilon_input[data_vertex_ndx, t] 
+          } else if( linear_basis == 2) {
+            this_eps = this_rep$epsilon_v[data_vertex_ndx, t] 
           }
           obs_this_year = sum(year_ndx_for_each_obs[t,] != -99)
           if(obs_this_year != 0) {
@@ -179,15 +163,17 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
   } else {
     this_rep = conf_obj$obj$report(MLE_pars)
     this_eta = time_model_matrix %*%  this_rep$time_betas +  data_spatial_model_matrix %*% this_rep$spatial_betas + model_matrix %*% this_rep$betas
-    if(!is.null(spline_spatial_covariates)) 
-      this_eta = this_eta + spline_spatial_$X[,-1] %*% this_rep$gammas_spatial 
-    if(!is.null(spline_catchability_covariates))
-      this_eta = this_eta + spline_$X[,-1] %*% this_rep$gammas 
+    if(length(spline_spatial_covariates) > 0) 
+      this_eta = this_eta + spline_spatial_prediction_matrix %*% this_rep$gammas_spatial 
+    if(length(spline_catchability_covariates) > 0)
+      this_eta = this_eta + spline_prediction_matrix %*% this_rep$gammas 
     if(conf_obj$tmb_data$omega_indicator) {
       if(linear_basis == 0) {
         this_eta = this_eta + A %*% this_rep$omega_input / this_rep$tau_omega
-      } else {
+      } else if(linear_basis == 1) {
         this_eta = this_eta + this_rep$omega_input[data_vertex_ndx]
+      } else if(linear_basis == 2) {
+        this_eta = this_eta + this_rep$omega_v[data_vertex_ndx]
       }
     }
     if(conf_obj$tmb_data$epsilon_indicator) {
@@ -195,8 +181,10 @@ predict_out_of_sample = function(conf_obj, out_of_sample_df, observed_df, mesh, 
         this_eps = NULL
         if(linear_basis == 0) {
           this_eps = A %*% this_rep$epsilon_input[,t] / this_rep$tau_epsilon
-        } else {
-          this_eps = this_rep$epsilon_input[data_vertex_ndx, t]
+        } else if (linear_basis == 1) {
+          this_eps = this_rep$epsilon_input[data_vertex_ndx, t] 
+        } else if( linear_basis == 2) {
+          this_eps = this_rep$epsilon_v[data_vertex_ndx, t] 
         }
         obs_this_year = sum(year_ndx_for_each_obs[t,] != -99)
         if(obs_this_year != 0) {

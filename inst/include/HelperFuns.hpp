@@ -1,3 +1,18 @@
+using namespace R_inla;
+using namespace density;
+using namespace tmbutils;
+using namespace Eigen;
+
+// Manually create a sparse matrix
+template<class Type>
+SparseMatrix<Type> Q_spde_generalized(spde_t<Type> spde, Type kappa, int alpha=2){
+  Type kappa_pow2 = kappa*kappa;
+  Type kappa_pow4 = kappa_pow2*kappa_pow2;
+  
+  if( alpha==1 ) return kappa_pow2*spde.M0 + spde.M1;
+  if( alpha==2 ) return kappa_pow4*spde.M0 + Type(2.0)*kappa_pow2*spde.M1 + spde.M2;
+}
+
 /*
 * Valid link functions
 */

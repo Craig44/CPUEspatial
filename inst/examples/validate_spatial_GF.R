@@ -135,6 +135,33 @@ full_proj_df$area = 1 ## equal area
 data = sampData
 coordinates(data) <- ~ x + y
 coordinates(full_proj_df) <- ~ x + y
+observed_df = data
+projection_df = full_proj_df
+mesh = mesh
+family = 2
+link = 0
+include_omega = T
+include_epsilon = F
+response_variable_label = "y_i"
+time_variable_label = "year"
+catchability_covariates = "fleet_ndx"
+spatial_covariates = c("region")
+spline_catchability_covariates = NULL
+spline_spatial_covariates = NULL
+trace_level = "none"
+linear_basis = 2
+epsilon_structure = "iid"
+apply_preferential_sampling = 0
+preference_model_type = 0
+pref_bounds = c(-10, 10)
+logit_general = CPUEspatial:::logit_general
+check_inputs = CPUEspatial:::check_inputs
+logit_pref_hyper_prior_vals = c(0,0.4)
+pref_hyper_distribution = 0
+spatial_model_w_omega = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 
+                                      response_variable_label = "y_i", time_variable_label = "year", catchability_covariates = "fleet_ndx", 
+                                      spatial_covariates = c("region"),spline_catchability_covariates = NULL,
+                                      spline_spatial_covariates = NULL, trace_level = "none", linear_basis = 2)
 
 ## check they all configure correclty
 spatial_model_w_omega = configure_obj(observed_df = data, projection_df = full_proj_df, mesh = mesh, family = 2, link = 0, include_omega = T, include_epsilon = F, 

@@ -18,9 +18,6 @@
 // (here it's ModelA)
 template <class Type>
 Type SpatialTemporalCPUE(objective_function<Type>* obj) {
-  using namespace R_inla;
-  using namespace density;
-  using namespace Eigen;
   // Dimensions
   DATA_INTEGER( n_i );         // Total number of observations
   DATA_INTEGER( n_t );         // Number of years
@@ -50,6 +47,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   DATA_ARRAY( X_spatial_proj_zpt );	// Spatial projection model matrix for preference stuff dimensions = [n_z, p_s, n_t]
   
   DATA_VECTOR( pref_coef_bounds );  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
+  DATA_VECTOR(kappa_bounds);  // pref_coef_bounds(0) = lower bound, pref_coef_bounds(1) = upper bound
   DATA_INTEGER( apply_pref );       // 0 = no, 1 = yes
   DATA_INTEGER( hyper_prior_on_pref ) ;// 0 = no, 1 = yes
   DATA_ARRAY( Nij );                // number of observations in each each Proj cell dim[n_p, n_t]
@@ -190,6 +188,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   pref_numerator.setZero();
   pref_denom.setZero();
   spline_spatial_i.setZero();
+  omega_i.setZero();
+  epsilon_i.setZero();
   epsilon_vec.setZero();
   vector<Type> nll(7);  // 0 = GMRF (omega), 1 = GMRF (epsilon), 2 = obs, 3 = location, 4 = SPline catchability 5 = spline spatial, 6 = pref coeffecient hyper prior
   nll.setZero();
@@ -276,8 +276,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     for( i = 0;i < Sdims.size(); i++){
       int m_i = Sdims(i);
       gamma_i = gammas.segment(k,m_i);        // Recover betai
-      S_i = S.block(k,k,m_i,m_i);      // Recover Si
-      nll(4) -= Type(0.5) * m_i * ln_lambda(i) - 0.5 * lambda(i) * GMRF(S_i).Quadform(gamma_i);
+      S_i = lambda(i) * S.block(k,k,m_i,m_i);      // Recover Si
+      nll(4) -= Type(0.5) * m_i * ln_lambda(i) - 0.5 * GMRF(S_i).Quadform(gamma_i);
       k += m_i;
     }
     vector<Type> splineForReport = designMatrixForReport * gammas;
@@ -293,8 +293,8 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
     for( i = 0;i < Sdims_spatial.size(); i++){
       int m_i = Sdims_spatial(i);
       gamma_spatial_i = gammas_spatial.segment(k,m_i);        // Recover betai
-      S_i = S_spatial.block(k,k,m_i,m_i);      // Recover Si
-      nll(5) -= Type(0.5) * m_i * ln_lambda_spatial(i) - 0.5 * lambda_spatial(i) * GMRF(S_i).Quadform(gamma_spatial_i);
+      S_i = lambda_spatial(i) * S_spatial.block(k,k,m_i,m_i);      // Recover Si
+      nll(5) -= Type(0.5) * m_i * ln_lambda_spatial(i) - 0.5 *  GMRF(S_i).Quadform(gamma_spatial_i);
       k += m_i;
     }
     vector<Type> splineForReport_spatial = designMatrixForReport_spatial * gammas_spatial;
@@ -307,7 +307,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // Numerator for preference log likelihood
   if(LCGP_approach == 0) {
     for(i = 0; i < n_i; ++i)
-      pref_numerator(t_i(i)) += spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
+      pref_numerator(t_i(i)) += betas(0) + spatial_covariate_i(i) + spline_spatial_i(i) + epsilon_i(i) + omega_i(i);
   }
   // Systematic Component
   vector<Type> eta =  model_matrix * betas + time_model_matrix * time_betas + spatial_covariate_i + spline_spatial_i + omega_i + epsilon_i;
@@ -373,7 +373,7 @@ Type SpatialTemporalCPUE(objective_function<Type>* obj) {
   // time-varying components
   for(t = 0; t < n_t; ++t) {
     epsilon_proj = epsilon_input.col(t);
-    spatial_proj = X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + (Proj * epsilon_proj) /  tau_epsilon;
+    spatial_proj = betas(0) + X_spatial_proj_zpt.col(t).matrix() * spatial_betas + omega_proj + (Proj * epsilon_proj) /  tau_epsilon;
     if (spline_flag(1) == 1)
       spatial_proj += spline_spatial_model_matrix_proj_zpt.col(t).matrix() * gammas_spatial;
     
